@@ -1,0 +1,132 @@
+{
+  "theme": "Light",
+  "archetype": "Organic & Earthy with a Premium Tech Twist",
+  "design_philosophy": {
+    "core_concept": "Premium, warm, and rewarding AI food intelligence for hormonal conditions. Every interaction must feel dopamine-engineered, avoiding clinical or cold interfaces.",
+    "vibe": "Supportive, luxurious, engaging, tactile",
+    "key_mechanics": "Anticipation, variable rewards, micro-interactions, streak building."
+  },
+  "colors": {
+    "primary": "#534AB7",
+    "primary_hover": "#453D99",
+    "background": "#FFFFFF",
+    "surface_secondary": "#F8F7FF",
+    "border_color": "#E8E6FF",
+    "success": "#639922",
+    "warning": "#BA7517",
+    "danger": "#A32D2D",
+    "text_primary": "#1A1A24",
+    "text_secondary": "#6B6A7C",
+    "text_disabled": "#A09FAD",
+    "gradient_accent": "linear-gradient(135deg, #534AB7 0%, #756AD9 100%)"
+  },
+  "typography": {
+    "font_family": "Outfit, sans-serif",
+    "weights": {
+      "heading": "700",
+      "subheading": "600",
+      "body": "400"
+    },
+    "scale": {
+      "h1": "text-3xl md:text-4xl tracking-tight leading-tight",
+      "h2": "text-2xl tracking-tight leading-snug",
+      "h3": "text-xl tracking-tight",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm",
+      "tiny": "text-xs uppercase tracking-wider font-semibold"
+    }
+  },
+  "spacing_and_layout": {
+    "container": "w-full max-w-[480px] mx-auto min-h-screen bg-white relative shadow-[0_0_40px_rgba(0,0,0,0.05)] overflow-x-hidden",
+    "padding": {
+      "screen": "p-5",
+      "section_gap": "gap-6",
+      "card_internal": "p-5"
+    },
+    "navigation": "fixed bottom-0 w-full max-w-[480px] bg-white/80 backdrop-blur-xl border-t border-[#E8E6FF] pb-safe pt-3 px-6 flex justify-between items-center z-50",
+    "safe_area": "pb-24 pt-6"
+  },
+  "components": {
+    "card": {
+      "base": "bg-[#F8F7FF] border border-[#E8E6FF] rounded-[16px] shadow-[0_2px_12px_rgba(83,74,183,0.08)] overflow-hidden transition-all duration-300",
+      "hover": "hover:shadow-[0_8px_24px_rgba(83,74,183,0.12)] hover:-translate-y-1"
+    },
+    "button": {
+      "primary": "w-full bg-[#534AB7] text-white rounded-[12px] py-4 px-6 font-semibold flex justify-center items-center gap-2 transition-all duration-300 hover:bg-[#453D99] active:scale-[0.97]",
+      "secondary": "w-full bg-[#F8F7FF] text-[#534AB7] rounded-[12px] py-4 px-6 font-semibold flex justify-center items-center gap-2 border border-[#E8E6FF] transition-all duration-300 hover:bg-[#E8E6FF] active:scale-[0.97]",
+      "ghost": "w-full text-[#6B6A7C] rounded-[12px] py-4 px-6 font-medium flex justify-center items-center gap-2 transition-all duration-300 hover:bg-[#F8F7FF] hover:text-[#534AB7] active:scale-[0.97]"
+    },
+    "input": {
+      "base": "w-full bg-[#F8F7FF] border border-[#E8E6FF] rounded-[12px] px-4 py-4 text-[#1A1A24] focus:outline-none focus:ring-2 focus:ring-[#534AB7]/50 focus:border-[#534AB7] transition-all duration-300"
+    },
+    "score_indicator": {
+      "excellent": "bg-[#639922]/10 text-[#639922] font-semibold px-3 py-1 rounded-full text-sm flex items-center gap-1",
+      "moderate": "bg-[#BA7517]/10 text-[#BA7517] font-semibold px-3 py-1 rounded-full text-sm flex items-center gap-1",
+      "poor": "bg-[#A32D2D]/10 text-[#A32D2D] font-semibold px-3 py-1 rounded-full text-sm flex items-center gap-1"
+    }
+  },
+  "animations": {
+    "physics": {
+      "type": "spring",
+      "stiffness": 400,
+      "damping": 25,
+      "mass": 1
+    },
+    "page_transition": {
+      "initial": { "opacity": 0, "y": 20 },
+      "animate": { "opacity": 1, "y": 0 },
+      "exit": { "opacity": 0, "y": -20 },
+      "transition": { "type": "spring", "damping": 25, "stiffness": 300 }
+    },
+    "list_stagger": {
+      "visible": {
+        "transition": { "staggerChildren": 0.08 }
+      }
+    },
+    "item_entry": {
+      "hidden": { "opacity": 0, "y": 15, "scale": 0.95 },
+      "visible": { "opacity": 1, "y": 0, "scale": 1, "transition": { "type": "spring", "damping": 20 } }
+    },
+    "micro_interactions": "active:scale-[0.97] transition-transform duration-300"
+  },
+  "icons": {
+    "library": "lucide-react",
+    "stroke_width": 2,
+    "size": {
+      "small": 16,
+      "default": 24,
+      "large": 32
+    }
+  },
+  "media": {
+    "food_images": [
+      {
+        "url": "https://images.unsplash.com/photo-1542986130-d0c46350cf30?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzh8MHwxfHNlYXJjaHw0fHxoZWFsdGh5JTIwZm9vZCUyMGJvd2x8ZW58MHx8fHwxNzc1Mzk5NDMzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Healthy bowl of cooked foods"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1666819691822-29a09f0992e5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzh8MHwxfHNlYXJjaHwxfHxoZWFsdGh5JTIwZm9vZCUyMGJvd2x8ZW58MHx8fHwxNzc1Mzk5NDMzfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Rice and fresh vegetables bowl"
+      },
+      {
+        "url": "https://images.pexels.com/photos/6544388/pexels-photo-6544388.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Vegan buddha bowl with vibrant colors"
+      }
+    ],
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1767605777097-8298b580e57a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHx3ZWxsbmVzcyUyMHdvbWFuJTIwc21pbGluZ3xlbnwwfHx8fDE3NzUzOTk0MzR8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Smiling woman prioritizing wellness"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the mobile-first max-width of 480px, centered horizontally.",
+    "Do NOT use raw HTML `<select>` or `<input type='date'>`. Use Shadcn UI components for complex logic, but aggressively override their default styles to match the rounded (`rounded-[12px]/[16px]`), soft-shadow (`0 2px 12px rgba(83,74,183,0.08)`), subtle-purple (`bg-[#F8F7FF]`) aesthetic.",
+    "Ensure `framer-motion` is imported and used extensively. Every list should stagger in. Every button must have a spring scale effect on tap.",
+    "Dopamine engineering: Use the defined 'success' green extensively when displaying positive health ratings, alongside celebratory micro-animations (e.g., icons popping in).",
+    "Implement streaks and gamification visibly using circular progress or prominent badges in the profile and home screens.",
+    "All interactive elements MUST include `data-testid` attributes.",
+    "Do not use dark backgrounds, keep the interface overwhelmingly white with #F8F7FF accents and #534AB7 focal points."
+  ]
+}
