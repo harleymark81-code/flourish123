@@ -341,7 +341,7 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
     
     # Monthly avg score
     month_start = datetime.now(timezone.utc).replace(day=1).date().isoformat()
-    monthly_entries = await db.diary.find({"user_id": uid, "date": {"$gte": month_start}}).to_list(1000)
+    monthly_entries = await db.diary.find({"user_id": uid, "date": {"$gte": month_start}}, {"overall_score": 1}).to_list(500)
     monthly_avg = round(sum(e.get("overall_score", 0) for e in monthly_entries) / len(monthly_entries)) if monthly_entries else 0
     
     # Get streak bonus scans
@@ -622,8 +622,8 @@ async def get_patterns(current_user: dict = Depends(get_current_user)):
     
     # Get last 14 days of diary + symptoms
     two_weeks_ago = (datetime.now(timezone.utc).date() - timedelta(days=14)).isoformat()
-    diary_entries = await db.diary.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}).to_list(1000)
-    symptom_entries = await db.symptoms.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}).to_list(1000)
+    diary_entries = await db.diary.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}, {"food_name": 1, "overall_score": 1, "date": 1}).to_list(300)
+    symptom_entries = await db.symptoms.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}, {"energy": 1, "bloating": 1, "date": 1}).to_list(100)
     
     if len(diary_entries) < 5:
         return {"patterns": [], "message": "Keep logging your food to unlock patterns after 14 days."}
@@ -852,7 +852,7 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://food-wellness-score.preview.emergentagent.com?ref={referral_code}",
+        "referral_link": f"{os.environ.get('FRONTEND_URL', 'https://food-wellness-score.preview.emergentagent.com')}?ref={referral_code}",
         "paying_referrals": paying_referrals,
         "free_months_earned": paying_referrals,
         "monthly_commission": round(paying_referrals * 12.99 * 0.30, 2),
@@ -931,7 +931,7 @@ async def admin_users(request: Request):
     if not auth.startswith("admin_"):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    users = await db.users.find({"role": {"$ne": "admin"}}, {"password_hash": 0}).sort("created_at", -1).to_list(1000)
+    users = await db.users.find({"role": {"$ne": "admin"}}, {"password_hash": 0}).sort("created_at", -1).to_list(500)
     return {"users": [doc_to_dict(u) for u in users]}
 
 @api_router.get("/admin/transactions")
@@ -940,7 +940,7 @@ async def admin_transactions(request: Request):
     if not auth.startswith("admin_"):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    txns = await db.payment_transactions.find().sort("created_at", -1).to_list(1000)
+    txns = await db.payment_transactions.find().sort("created_at", -1).to_list(500)
     return {"transactions": [doc_to_dict(t) for t in txns]}
 
 @api_router.get("/admin/affiliates")
@@ -949,7 +949,7 @@ async def admin_affiliates(request: Request):
     if not auth.startswith("admin_"):
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    apps = await db.affiliate_applications.find().sort("submitted_at", -1).to_list(1000)
+    apps = await db.affiliate_applications.find().sort("submitted_at", -1).to_list(500)
     return {"applications": [doc_to_dict(a) for a in apps]}
 
 @api_router.put("/admin/affiliates/{app_id}/status")
