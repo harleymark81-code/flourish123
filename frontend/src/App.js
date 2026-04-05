@@ -146,11 +146,10 @@ function AppContent() {
         process.env.REACT_APP_EMAILJS_SERVICE_ID,
         process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
         {
-          to_email: "theflourishfoodapp@gmail.com",
-          subject: "New Premium Subscriber",
-          from_name: email,
-          from_email: email,
-          message: `New Premium Subscriber!\n\nEmail: ${email}\nPlan: ${plan}\nDate: ${new Date().toISOString()}`
+          event_type: "New Premium Subscriber",
+          user_email: email,
+          details: `Plan: ${plan}`,
+          time: new Date().toLocaleString("en-GB")
         },
         process.env.REACT_APP_EMAILJS_PUBLIC_KEY
       );
@@ -182,11 +181,7 @@ function AppContent() {
   if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
 
   const handleDiaryTab = () => {
-    if (!user.is_premium) {
-      openPaywall("diary");
-    } else {
-      setActiveTab("diary");
-    }
+    setActiveTab("diary");
   };
 
   return (

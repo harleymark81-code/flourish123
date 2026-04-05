@@ -188,6 +188,15 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
   const [particles, setParticles] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
   const isPremium = user?.is_premium;
+
+  // Show notification prompt after first food rating completes (not on app open)
+  useEffect(() => {
+    const alreadyAsked = localStorage.getItem("notif_asked");
+    if (!alreadyAsked && "Notification" in window && Notification.permission === "default") {
+      const timer = setTimeout(() => setShowNotifSheet(true), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
   const verdict = getVerdict(rating.overallScore);
 
   // Free: show naturalness + hormonal fully; inflammation + gut = pixelated
@@ -220,12 +229,6 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
       }));
       setParticles(newParticles);
       setTimeout(() => setParticles([]), 700);
-
-      // Show custom notification bottom sheet after first log
-      const alreadyAsked = localStorage.getItem("notif_asked");
-      if (!alreadyAsked && "Notification" in window && Notification.permission === "default") {
-        setTimeout(() => setShowNotifSheet(true), 1200);
-      }
     } catch (e) {}
   };
 

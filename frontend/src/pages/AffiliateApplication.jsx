@@ -38,11 +38,10 @@ export default function AffiliateApplication() {
           process.env.REACT_APP_EMAILJS_SERVICE_ID,
           process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
           {
-            to_email: "theflourishfoodapp@gmail.com",
-            subject: "New Flourish Affiliate Application",
-            from_name: formData.name,
-            from_email: formData.email,
-            message: `Name: ${formData.name}\nEmail: ${formData.email}\nSocial Handles: ${formData.social_handles}\nAudience Size: ${formData.audience_size}\nCondition Niche: ${formData.condition_niche}\nDescription: ${formData.description}`
+            event_type: "New Affiliate Application",
+            user_email: formData.email,
+            details: `Name: ${formData.name} | Social: ${formData.social_handles} | Audience: ${formData.audience_size} | Niche: ${formData.condition_niche} | Bio: ${formData.description}`,
+            time: new Date().toLocaleString("en-GB")
           },
           process.env.REACT_APP_EMAILJS_PUBLIC_KEY
         );

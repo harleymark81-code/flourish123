@@ -17,7 +17,32 @@ import json
 import stripe as stripe_lib
 from datetime import datetime, timezone, timedelta
 import httpx
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+# Direct Anthropic API helper (no third-party wrapper needed)
+
+ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+
+async def call_anthropic(system: str, user_msg: str) -> str:
+    """Call Anthropic API directly using httpx."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise ValueError("ANTHROPIC_API_KEY not set")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_MODEL,
+                "max_tokens": 2048,
+                "system": system,
+                "messages": [{"role": "user", "content": user_msg}],
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["content"][0]["text"]
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -405,10 +430,8 @@ async def rate_food(data: FoodRatingRequest, current_user: dict = Depends(get_cu
     managing_duration = current_user.get("managing_duration", "")
     food_challenge = current_user.get("food_challenge", "")
     
-    llm_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    
     system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness. You provide evidence-based food ratings personalised to the user's specific health conditions. You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
-    
+
     user_prompt = f"""Rate this food for a user with the following profile:
 - Health conditions: {', '.join(conditions) if conditions else 'General health'}
 - Health goals: {', '.join(goals) if goals else 'General wellness'}
@@ -442,16 +465,10 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
   ],
   "bodySystemsAffected": ["<from: Hormones, Gut, Immune, Thyroid, Energy>", ...]
 }}"""
-    
+
     try:
-        chat = LlmChat(
-            api_key=llm_key,
-            session_id=f"food_rating_{uuid.uuid4()}",
-            system_message=system_msg
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
-        response = await chat.send_message(UserMessage(text=user_prompt))
-        
+        response = await call_anthropic(system_msg, user_prompt)
+
         # Clean and parse JSON
         response_text = response.strip()
         if response_text.startswith("```"):
@@ -489,19 +506,12 @@ async def get_daily_tip(current_user: dict = Depends(get_current_user)):
         return {"tip": existing["tip"], "date": today}
     
     conditions = current_user.get("conditions", ["general health"])
-    llm_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    
+
     try:
-        chat = LlmChat(
-            api_key=llm_key,
-            session_id=f"daily_tip_{uuid.uuid4()}",
-            system_message="You are a warm, supportive nutritional advisor for people with hormonal conditions."
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
-        response = await chat.send_message(UserMessage(
-            text=f"Give me one short, warm, specific daily food tip (2 sentences max) for someone managing: {', '.join(conditions)}. Be encouraging and specific. No bullet points, just plain text."
-        ))
-        
+        response = await call_anthropic(
+            "You are a warm, supportive nutritional advisor for people with hormonal conditions.",
+            f"Give me one short, warm, specific daily food tip (2 sentences max) for someone managing: {', '.join(conditions)}. Be encouraging and specific. No bullet points, just plain text."
+        )
         tip = response.strip()
         await db.daily_tips.insert_one({"user_id": uid, "date": today, "tip": tip})
         return {"tip": tip, "date": today}
@@ -513,21 +523,11 @@ async def get_daily_tip(current_user: dict = Depends(get_current_user)):
 async def get_meal_plan(data: MealPlanRequest, current_user: dict = Depends(get_current_user)):
     conditions = current_user.get("conditions", ["general health"])
     goals = current_user.get("goals", [])
-    llm_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("ANTHROPIC_API_KEY")
-    
-    food_emojis = {
-        "breakfast": "🥣", "lunch": "🥗", "dinner": "🍽️", "snack": "🍎"
-    }
-    
+
     try:
-        chat = LlmChat(
-            api_key=llm_key,
-            session_id=f"meal_plan_{uuid.uuid4()}",
-            system_message="You are a nutritional advisor specialised in hormonal health. Return ONLY valid JSON."
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
-        response = await chat.send_message(UserMessage(
-            text=f"""Create a one-day meal plan for someone with: {', '.join(conditions)}. Goals: {', '.join(goals) if goals else 'general wellness'}.
+        response = await call_anthropic(
+            "You are a nutritional advisor specialised in hormonal health. Return ONLY valid JSON.",
+            f"""Create a one-day meal plan for someone with: {', '.join(conditions)}. Goals: {', '.join(goals) if goals else 'general wellness'}.
 All meals should be green-rated (score 70+). Return ONLY this JSON:
 {{
   "breakfast": {{"name": "<meal>", "description": "<brief>", "predictedScore": <70-95>, "emoji": "🥣"}},
@@ -535,7 +535,7 @@ All meals should be green-rated (score 70+). Return ONLY this JSON:
   "dinner": {{"name": "<meal>", "description": "<brief>", "predictedScore": <70-95>, "emoji": "🍽️"}},
   "snack": {{"name": "<meal>", "description": "<brief>", "predictedScore": <70-95>, "emoji": "🍎"}}
 }}"""
-        ))
+        )
         
         response_text = response.strip()
         if response_text.startswith("```"):
@@ -628,27 +628,21 @@ async def get_patterns(current_user: dict = Depends(get_current_user)):
     if len(diary_entries) < 5:
         return {"patterns": [], "message": "Keep logging your food to unlock patterns after 14 days."}
     
-    llm_key = os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("ANTHROPIC_API_KEY")
     conditions = current_user.get("conditions", [])
-    
+
     try:
-        chat = LlmChat(
-            api_key=llm_key,
-            session_id=f"patterns_{uuid.uuid4()}",
-            system_message="You are a nutritional analyst. Identify patterns between food and health symptoms."
-        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
-        
         diary_summary = [(e.get("food_name", ""), e.get("overall_score", 0), e.get("date", "")) for e in diary_entries[:20]]
         symptom_summary = [(e.get("energy", 0), e.get("bloating", 0), e.get("date", "")) for e in symptom_entries[:14]]
-        
-        response = await chat.send_message(UserMessage(
-            text=f"""Analyse these food and symptom patterns for someone with {', '.join(conditions)}:
+
+        response = await call_anthropic(
+            "You are a nutritional analyst. Identify patterns between food and health symptoms.",
+            f"""Analyse these food and symptom patterns for someone with {', '.join(conditions)}:
 Food diary (food, score, date): {diary_summary[:10]}
 Symptoms (energy, bloating, date): {symptom_summary[:7]}
 
 Return 3 specific insights as JSON array: [{{"insight": "<2 sentence finding>", "type": "<positive|negative|neutral>"}}]
 Only return the JSON array, no other text."""
-        ))
+        )
         
         response_text = response.strip()
         if response_text.startswith("```"):
@@ -877,7 +871,43 @@ async def stripe_webhook(request: Request):
                 logger.error(f"Failed to handle subscription deletion: {e}")
 
         elif event_type == "customer.subscription.updated":
-            pass
+            # Reactivate premium if subscription becomes active again
+            subscription = payload.get("data", {}).get("object", {})
+            sub_status = subscription.get("status", "")
+            customer_id = subscription.get("customer")
+            if sub_status == "active" and customer_id:
+                try:
+                    txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
+                    if not txn:
+                        # Try matching by session metadata
+                        txn = await db.payment_transactions.find_one({"payment_status": "paid", "stripe_customer_id": customer_id})
+                    uid = txn.get("user_id") if txn else None
+                    if uid:
+                        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                        await db.users.update_one(
+                            {"_id": ObjectId(uid)},
+                            {"$set": {"is_premium": True, "premium_expires_at": expires}}
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to handle subscription update: {e}")
+
+        elif event_type == "invoice.payment_succeeded":
+            # Extend premium on successful recurring payment
+            invoice = payload.get("data", {}).get("object", {})
+            customer_id = invoice.get("customer")
+            if customer_id:
+                try:
+                    txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
+                    uid = txn.get("user_id") if txn else None
+                    if uid:
+                        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                        await db.users.update_one(
+                            {"_id": ObjectId(uid)},
+                            {"$set": {"is_premium": True, "premium_expires_at": expires}}
+                        )
+                        logger.info(f"Premium renewed for user {uid} via invoice.payment_succeeded")
+                except Exception as e:
+                    logger.error(f"Failed to handle invoice payment: {e}")
 
         return {"received": True}
     except Exception as e:
