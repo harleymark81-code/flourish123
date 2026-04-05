@@ -14,10 +14,10 @@ import bcrypt
 import jwt
 import uuid
 import json
+import stripe as stripe_lib
 from datetime import datetime, timezone, timedelta
 import httpx
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -727,44 +727,51 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
     uid = current_user.get("id") or current_user.get("_id")
     
     stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    
+    stripe_lib.api_key = stripe_key
     
     if data.plan == "monthly":
         price_id = os.environ.get("STRIPE_MONTHLY_PRICE_ID", "")
     else:
         price_id = os.environ.get("STRIPE_ANNUAL_PRICE_ID", "")
     
+    if not price_id:
+        raise HTTPException(status_code=500, detail="Price ID not configured")
+    
     origin = data.origin_url.rstrip("/")
     success_url = f"{origin}/?success=true&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin}/?cancelled=true"
     
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    
     try:
-        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-        checkout_req = CheckoutSessionRequest(
-            stripe_price_id=price_id,
-            quantity=1,
+        session = stripe_lib.checkout.Session.create(
+            mode="subscription",
+            payment_method_types=["card"],
+            line_items=[{"price": price_id, "quantity": 1}],
+            subscription_data={"trial_period_days": 3},
             success_url=success_url,
             cancel_url=cancel_url,
             metadata={"user_id": uid, "email": current_user.get("email", ""), "plan": data.plan}
         )
-        session = await stripe_checkout.create_checkout_session(checkout_req)
         
         # Save pending transaction
         await db.payment_transactions.insert_one({
-            "session_id": session.session_id,
+            "session_id": session.id,
             "user_id": uid,
             "email": current_user.get("email", ""),
             "plan": data.plan,
-            "amount": 12.99 if data.plan == "monthly" else 84.99,
+            "amount": 12.99 if data.plan == "monthly" else 79.0,
             "currency": "gbp",
             "status": "pending",
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
-        return {"url": session.url, "session_id": session.session_id}
+        return {"url": session.url, "session_id": session.id}
+    except stripe_lib.error.StripeError as e:
+        logger.error(f"Stripe error: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to create checkout session: {str(e)}")
     except Exception as e:
         logger.error(f"Checkout error: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {str(e)}")
@@ -773,9 +780,7 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
 async def get_payment_status(session_id: str, request: Request, current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
     
-    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
+    stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
     
     # Check if already processed
     transaction = await db.payment_transactions.find_one({"session_id": session_id})
@@ -783,23 +788,23 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
         return {"status": "complete", "payment_status": "paid", "already_processed": True}
     
     try:
-        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-        status = await stripe_checkout.get_checkout_status(session_id)
+        session = stripe_lib.checkout.Session.retrieve(session_id)
         
-        if status.payment_status == "paid" and (not transaction or transaction.get("payment_status") != "paid"):
+        payment_status = session.payment_status
+        status = session.status
+        # For subscription/trial: payment_status may be "no_payment_required" initially
+        is_success = (payment_status in ["paid", "no_payment_required"] and status == "complete") or payment_status == "paid"
+        
+        if is_success:
             # Update transaction
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
-                {"$set": {"status": status.status, "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}}
+                {"$set": {"status": "complete", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}}
             )
             
             # Upgrade user to premium
-            plan = status.metadata.get("plan", "monthly")
-            expires = None
-            if plan == "monthly":
-                expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-            else:
-                expires = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+            plan = session.metadata.get("plan", "monthly") if session.metadata else "monthly"
+            expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
             
             await db.users.update_one(
                 {"_id": ObjectId(uid)},
@@ -811,28 +816,69 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
                 }}
             )
         
-        return {"status": status.status, "payment_status": status.payment_status}
+        return {"status": status, "payment_status": payment_status, "is_success": is_success}
     except Exception as e:
         logger.error(f"Payment status error: {e}")
-        return {"status": "unknown", "payment_status": "unknown"}
+        return {"status": "unknown", "payment_status": "unknown", "is_success": False}
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    
-    stripe_key = os.environ.get("STRIPE_SECRET_KEY", "")
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
+    stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
     
     try:
-        stripe_checkout = StripeCheckout(api_key=stripe_key, webhook_url=webhook_url)
-        event = await stripe_checkout.handle_webhook(body, sig)
-        if event and event.payment_status == "paid":
-            await db.payment_transactions.update_one(
-                {"session_id": event.session_id},
-                {"$set": {"payment_status": "paid", "status": "complete"}}
-            )
+        payload = json.loads(body)
+        event_type = payload.get("type", "")
+        
+        if event_type == "checkout.session.completed":
+            session = payload.get("data", {}).get("object", {})
+            session_id = session.get("id")
+            payment_status = session.get("payment_status")
+            metadata = session.get("metadata") or {}
+            user_id = metadata.get("user_id")
+            plan = metadata.get("plan", "monthly")
+            
+            if session_id and (payment_status in ["paid", "no_payment_required"]):
+                await db.payment_transactions.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"payment_status": "paid", "status": "complete", "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                if user_id:
+                    try:
+                        expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
+                        await db.users.update_one(
+                            {"_id": ObjectId(user_id)},
+                            {"$set": {
+                                "is_premium": True,
+                                "premium_plan": plan,
+                                "premium_since": datetime.now(timezone.utc).isoformat(),
+                                "premium_expires_at": expires
+                            }}
+                        )
+                        logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan})")
+                    except Exception as e:
+                        logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
+
+        elif event_type == "customer.subscription.deleted":
+            subscription = payload.get("data", {}).get("object", {})
+            sub_id = subscription.get("id")
+            customer_id = subscription.get("customer")
+            # Try to find user by customer_id or by looking up the transaction
+            try:
+                txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
+                uid = txn.get("user_id") if txn else None
+                if uid:
+                    await db.users.update_one(
+                        {"_id": ObjectId(uid)},
+                        {"$set": {"is_premium": False, "premium_expires_at": datetime.now(timezone.utc).isoformat()}}
+                    )
+                    logger.info(f"User {uid} downgraded from premium via webhook (subscription deleted)")
+            except Exception as e:
+                logger.error(f"Failed to handle subscription deletion: {e}")
+
+        elif event_type == "customer.subscription.updated":
+            pass
+
         return {"received": True}
     except Exception as e:
         logger.error(f"Webhook error: {e}")
@@ -866,6 +912,8 @@ async def affiliate_apply(data: AffiliateApplicationRequest):
     if existing:
         raise HTTPException(status_code=400, detail="Application already submitted with this email")
     
+    affiliate_code = "AFF" + str(uuid.uuid4())[:6].upper()
+    
     app_doc = {
         "name": data.name,
         "email": data.email,
@@ -874,27 +922,55 @@ async def affiliate_apply(data: AffiliateApplicationRequest):
         "condition_niche": data.condition_niche,
         "description": data.description,
         "status": "pending",
+        "affiliate_code": affiliate_code,
+        "clicks": 0,
+        "signups": 0,
         "submitted_at": datetime.now(timezone.utc).isoformat()
     }
     result = await db.affiliate_applications.insert_one(app_doc)
-    app_doc["id"] = str(result.inserted_id)
-    return {"success": True, "id": app_doc["id"]}
+    return {"success": True, "id": str(result.inserted_id), "affiliate_code": affiliate_code}
 
 @api_router.get("/affiliate/dashboard")
 async def affiliate_dashboard(ref: str):
-    # Track clicks via referral code
+    # Look up by affiliate_code
     aff = await db.affiliate_applications.find_one({"affiliate_code": ref})
     if not aff:
-        raise HTTPException(status_code=404, detail="Affiliate not found")
+        # Return empty dashboard for unknown codes (don't expose 404)
+        return {
+            "name": "Affiliate",
+            "status": "pending",
+            "affiliate_code": ref,
+            "clicks": 0,
+            "signups": 0,
+            "paying_subscribers": 0,
+            "commission_earned": 0.0,
+            "commission_pending": 0.0
+        }
     
     paying_subs = await db.payment_transactions.count_documents({"referral_code": ref, "payment_status": "paid"})
+    monthly_commission = round(paying_subs * 12.99 * 0.30, 2)
     
     return {
+        "name": aff.get("name", ""),
+        "status": aff.get("status", "pending"),
+        "affiliate_code": ref,
         "clicks": aff.get("clicks", 0),
         "signups": aff.get("signups", 0),
         "paying_subscribers": paying_subs,
-        "commission_earned": round(paying_subs * 12.99 * 0.30, 2)
+        "commission_earned": monthly_commission,
+        "commission_pending": monthly_commission  # pending until payout
     }
+
+@api_router.post("/affiliate/track-click")
+async def track_affiliate_click(request: Request):
+    body = await request.json()
+    ref = body.get("ref", "")
+    if ref:
+        await db.affiliate_applications.update_one(
+            {"affiliate_code": ref},
+            {"$inc": {"clicks": 1}}
+        )
+    return {"success": True}
 
 # ── ADMIN ─────────────────────────────────────────────────────────────────────
 @api_router.post("/admin/login")

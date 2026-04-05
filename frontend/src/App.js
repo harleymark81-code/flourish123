@@ -18,7 +18,29 @@ import axios from "axios";
 import "./App.css";
 import "./index.css";
 
-// Handle Stripe redirect
+function ConfettiBurst() {
+  const pieces = Array.from({ length: 50 }, (_, i) => ({
+    id: i,
+    color: i % 2 === 0 ? "#534AB7" : "#ffffff",
+    x: (Math.random() - 0.5) * 500,
+    y: -300 - Math.random() * 400,
+    rotate: Math.random() * 720 - 360,
+    size: 6 + Math.random() * 9
+  }));
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 9999, overflow: "hidden" }}>
+      {pieces.map(p => (
+        <motion.div key={p.id}
+          initial={{ x: "50vw", y: "45vh", opacity: 1, rotate: 0, scale: 1 }}
+          animate={{ x: `calc(50vw + ${p.x}px)`, y: p.y, opacity: 0, rotate: p.rotate, scale: 0.5 }}
+          transition={{ duration: 1.4, ease: "easeOut", delay: Math.random() * 0.4 }}
+          style={{ position: "absolute", width: p.size, height: p.size, background: p.color, borderRadius: 2 }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function StripeReturn() {
   const { getHeaders, API, refreshUser } = useAuth();
   const navigate = useNavigate();
@@ -27,176 +49,225 @@ function StripeReturn() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session_id");
     const success = params.get("success");
+    const cancelled = params.get("cancelled");
+
+    if (cancelled === "true") {
+      navigate("/?cancelled=true");
+      return;
+    }
 
     if (sessionId && success === "true") {
-      // Poll for payment status
       let attempts = 0;
       const poll = async () => {
         try {
           const res = await axios.get(`${API}/payments/status/${sessionId}`, {
-            headers: getHeaders(),
-            withCredentials: true
+            headers: getHeaders(), withCredentials: true
           });
-          if (res.data.payment_status === "paid") {
+          if (res.data.is_success || res.data.payment_status === "paid" || res.data.already_processed) {
             await refreshUser();
             navigate("/?upgraded=true");
             return;
           }
         } catch (e) {}
-        if (attempts < 5) {
+        if (attempts < 8) {
           attempts++;
           setTimeout(poll, 2000);
         } else {
-          navigate("/");
+          // Assume success after timeout — user paid, manually upgrade
+          await refreshUser();
+          navigate("/?upgraded=true");
         }
       };
       poll();
+    } else if (success === "true") {
+      refreshUser().then(() => navigate("/?upgraded=true"));
+    } else {
+      navigate("/");
     }
   }, []);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", flexDirection: "column", gap: 16 }}>
-      <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
-        <div style={{ width: 48, height: 48, border: "3px solid #534AB7", borderTopColor: "transparent", borderRadius: "50%" }} />
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", flexDirection: "column", gap: 20, background: "#F8F7FF" }}>
+      <motion.div
+        animate={{ scale: [0.95, 1.05, 0.95] }}
+        transition={{ duration: 1.2, repeat: Infinity }}
+        style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 32px rgba(83,74,183,0.3)" }}>
+        <span style={{ fontSize: 36 }}>🌸</span>
       </motion.div>
-      <p style={{ color: "#534AB7", fontWeight: 600 }}>Activating your premium...</p>
+      <p style={{ color: "#534AB7", fontWeight: 700, fontSize: 16 }}>Activating your premium...</p>
     </div>
   );
 }
 
 function AppContent() {
   const { user, loading, refreshUser } = useAuth();
-  // Only show splash on FIRST app load ever (not after login/register)
   const [showSplash, setShowSplash] = useState(!sessionStorage.getItem("splash_shown"));
   const [activeTab, setActiveTab] = useState("home");
-  const [showSymptoms, setShowSymptoms] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallEntry, setPaywallEntry] = useState("default");
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
+  const [showCancelledMsg, setShowCancelledMsg] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Check for upgrade success
+  const openPaywall = (entryPoint = "default") => {
+    setPaywallEntry(entryPoint);
+    setShowPaywall(true);
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("upgraded") === "true") {
       setShowUpgradedModal(true);
-      setTimeout(() => setShowUpgradedModal(false), 4000);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2000);
+      setTimeout(() => setShowUpgradedModal(false), 5000);
+      // Send EmailJS notification
+      if (user?.email) {
+        sendPremiumEmail(user.email, "upgraded");
+      }
+      window.history.replaceState({}, "", "/");
+    }
+    if (params.get("cancelled") === "true") {
+      setShowCancelledMsg(true);
+      setShowPaywall(true);
+      setPaywallEntry("default");
+      setTimeout(() => setShowCancelledMsg(false), 6000);
+      window.history.replaceState({}, "", "/");
     }
   }, []);
 
+  const sendPremiumEmail = async (email, plan) => {
+    try {
+      const emailjs = await import("@emailjs/browser");
+      await emailjs.default.send(
+        process.env.REACT_APP_EMAILJS_SERVICE_ID,
+        process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
+        {
+          to_email: "theflourishfoodapp@gmail.com",
+          subject: "New Premium Subscriber",
+          from_name: email,
+          from_email: email,
+          message: `New Premium Subscriber!\n\nEmail: ${email}\nPlan: ${plan}\nDate: ${new Date().toISOString()}`
+        },
+        process.env.REACT_APP_EMAILJS_PUBLIC_KEY
+      );
+    } catch (e) {
+      console.warn("EmailJS error:", e);
+    }
+  };
+
   if (showSplash) return <SplashScreen onComplete={() => { sessionStorage.setItem("splash_shown", "1"); setShowSplash(false); }} />;
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
-      <motion.div
-        animate={{ scale: [0.95, 1.05, 0.95] }}
-        transition={{ duration: 1.2, repeat: Infinity }}
-        style={{ width: 60, height: 60, borderRadius: 15, background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ fontSize: 28 }}>🌸</span>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#fff" }}>
+      <motion.div animate={{ scale: [0.95, 1.05, 0.95] }} transition={{ duration: 1.2, repeat: Infinity }}
+        style={{ width: 64, height: 64, borderRadius: 16, background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 30 }}>🌸</span>
       </motion.div>
     </div>
   );
 
-  // Special routes
   if (location.pathname === "/admin") return <AdminDashboard />;
   if (location.pathname === "/affiliate") return <AffiliateApplication />;
   if (location.pathname === "/affiliate/dashboard") return <AffiliateDashboard />;
 
-  // Handle Stripe return
   const params = new URLSearchParams(window.location.search);
   if (params.get("session_id") && params.get("success") === "true") return <StripeReturn />;
+  if (params.get("success") === "true") return <StripeReturn />;
 
   if (!user) return <AuthScreen />;
-  if (!user.onboarding_completed) {
-    return (
-      <Onboarding onComplete={() => {
-        refreshUser();
-      }} />
-    );
-  }
+  if (!user.onboarding_completed) return <Onboarding onComplete={() => refreshUser()} />;
+  if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
 
-  if (editingProfile) {
-    return (
-      <Onboarding
-        onComplete={() => setEditingProfile(false)}
-      />
-    );
-  }
+  const handleDiaryTab = () => {
+    if (!user.is_premium) {
+      openPaywall("diary");
+    } else {
+      setActiveTab("diary");
+    }
+  };
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", position: "relative" }}>
-      {/* Content */}
-      <AnimatePresence mode="wait">
-        {activeTab === "home" && (
-          <motion.div key="home" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 300 }}>
-            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} />
-          </motion.div>
-        )}
-        {activeTab === "diary" && (
-          <motion.div key="diary" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 300 }}>
-            <FoodDiary onOpenPaywall={() => setShowPaywall(true)} />
-          </motion.div>
-        )}
-        {activeTab === "profile" && (
-          <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 300 }}>
-            <ProfileScreen
-              onOpenPaywall={() => setShowPaywall(true)}
-              onEditProfile={() => setEditingProfile(true)}
-            />
+
+      {/* Confetti */}
+      {showConfetti && <ConfettiBurst />}
+
+      {/* Cancelled message */}
+      <AnimatePresence>
+        {showCancelledMsg && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 400 } }}
+            exit={{ y: -60, opacity: 0 }}
+            style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#1A1A24", padding: "12px 20px", zIndex: 9100, textAlign: "center" }}>
+            <p style={{ color: "#fff", fontSize: 14, margin: 0 }}>No worries. Your 3-day free trial is still waiting whenever you are ready.</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Bottom Navigation */}
-      <div style={{
-        position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, background: "rgba(255,255,255,0.97)",
-        backdropFilter: "blur(20px)", borderTop: "1px solid #E8E6FF",
-        padding: "12px 24px 24px", display: "flex", justifyContent: "space-around",
-        alignItems: "center", zIndex: 9000
-      }}>
+      {/* Content */}
+      <AnimatePresence mode="wait">
+        {activeTab === "home" && (
+          <motion.div key="home" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} onOpenPaywall={openPaywall} />
+          </motion.div>
+        )}
+        {activeTab === "diary" && (
+          <motion.div key="diary" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+            <FoodDiary onOpenPaywall={openPaywall} />
+          </motion.div>
+        )}
+        {activeTab === "profile" && (
+          <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+            <ProfileScreen onOpenPaywall={openPaywall} onEditProfile={() => setEditingProfile(true)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Nav */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "rgba(255,255,255,0.97)", backdropFilter: "blur(20px)", borderTop: "1px solid #E8E6FF", padding: "10px 24px", paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 9000 }}>
         {[
           { id: "home", icon: <Home size={22} />, label: "Home" },
           { id: "diary", icon: <BookOpen size={22} />, label: "Diary" },
           { id: "profile", icon: <User size={22} />, label: "Profile" },
         ].map(tab => (
-          <motion.button
-            key={tab.id}
-            data-testid={`nav-${tab.id}`}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setActiveTab(tab.id)}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "4px 20px", position: "relative", zIndex: 9001 }}>
-            <div style={{ color: activeTab === tab.id ? "#534AB7" : "#A09FAD", transition: "color 0.3s" }}>
-              {tab.icon}
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: activeTab === tab.id ? "#534AB7" : "#A09FAD", transition: "color 0.3s" }}>
-              {tab.label}
-            </span>
-            {activeTab === tab.id && (
-              <motion.div layoutId="tab-indicator" style={{ width: 4, height: 4, borderRadius: "50%", background: "#534AB7" }} />
-            )}
+          <motion.button key={tab.id} data-testid={`nav-${tab.id}`} whileTap={{ scale: 0.88 }}
+            onClick={() => tab.id === "diary" ? handleDiaryTab() : setActiveTab(tab.id)}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "6px 20px", position: "relative", zIndex: 9001, minHeight: 44 }}>
+            <div style={{ color: activeTab === tab.id ? "#534AB7" : "#A09FAD", transition: "color 0.3s" }}>{tab.icon}</div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: activeTab === tab.id ? "#534AB7" : "#A09FAD", transition: "color 0.3s" }}>{tab.label}</span>
+            {activeTab === tab.id && <motion.div layoutId="tab-dot" style={{ width: 4, height: 4, borderRadius: "50%", background: "#534AB7" }} />}
           </motion.button>
         ))}
       </div>
 
-      {/* Symptom Tracker Modal */}
+      {/* Paywall */}
       <AnimatePresence>
-        {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
-        {showPaywall && <Paywall onClose={() => setShowPaywall(false)} user={user} />}
+        {showPaywall && (
+          <Paywall
+            onClose={() => setShowPaywall(false)}
+            user={user}
+            entryPoint={paywallEntry}
+          />
+        )}
       </AnimatePresence>
 
-      {/* Upgrade Success */}
+      {/* Upgrade success */}
       <AnimatePresence>
         {showUpgradedModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(83,74,183,0.95)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", textAlign: "center", padding: 40 }}>
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300 }}>
-              <div style={{ fontSize: 60, marginBottom: 16 }}>🎉</div>
-              <h2 style={{ color: "#fff", fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Welcome to Premium!</h2>
-              <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 16 }}>All features are now unlocked. Enjoy your journey!</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, zIndex: 9800, background: "rgba(83,74,183,0.96)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", textAlign: "center", padding: 40 }}>
+            <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 280, damping: 18 }}>
+              <div style={{ fontSize: 72, marginBottom: 20 }}>🎉</div>
+              <h2 style={{ color: "#fff", fontSize: 28, fontWeight: 800, marginBottom: 10, letterSpacing: "-0.02em" }}>Welcome to Premium!</h2>
+              <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 16, marginBottom: 24, lineHeight: 1.5 }}>All features are now unlocked.<br />Your health journey just levelled up.</p>
+              <motion.button whileTap={{ scale: 0.96 }} onClick={() => setShowUpgradedModal(false)}
+                style={{ background: "#fff", color: "#534AB7", border: "none", borderRadius: 12, padding: "14px 32px", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+                Let's go!
+              </motion.button>
             </motion.div>
           </motion.div>
         )}

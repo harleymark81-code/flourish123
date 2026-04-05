@@ -35,7 +35,7 @@ function getScoreColor(score) {
   return "#A32D2D";
 }
 
-export default function HomeScreen({ onNavigate }) {
+export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   const { user, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState(null);
@@ -44,9 +44,14 @@ export default function HomeScreen({ onNavigate }) {
   const [currentRating, setCurrentRating] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const [showMealPlanner, setShowMealPlanner] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
+  const [showPaywallLocal, setShowPaywallLocal] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const handleOpenPaywall = (entry = "default") => {
+    if (onOpenPaywall) onOpenPaywall(entry);
+    else setShowPaywallLocal(true);
+  };
   const [streakReward, setStreakReward] = useState(null);
   const [showReward, setShowReward] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);
@@ -146,7 +151,7 @@ export default function HomeScreen({ onNavigate }) {
       setCurrentRating(res.data);
     } catch (e) {
       if (e.response?.status === 429) {
-        setShowPaywall(true);
+        handleOpenPaywall();
       }
     } finally {
       setLoading(false);
@@ -182,7 +187,7 @@ export default function HomeScreen({ onNavigate }) {
         alert(lookupRes.data.message || "Product not found. Try searching by name.");
       }
     } catch (e) {
-      if (e.response?.status === 429) setShowPaywall(true);
+      if (e.response?.status === 429) handleOpenPaywall();
     } finally {
       setLoading(false);
       stopLoading();
@@ -204,7 +209,7 @@ export default function HomeScreen({ onNavigate }) {
     return <FoodRating
       rating={currentRating}
       onBack={() => { setCurrentRating(null); loadRecentRatings(); loadStats(); }}
-      onOpenPaywall={() => setShowPaywall(true)}
+      onOpenPaywall={() => handleOpenPaywall()}
     />;
   }
 
@@ -267,7 +272,7 @@ export default function HomeScreen({ onNavigate }) {
           <motion.button
             data-testid="crown-btn"
             whileTap={{ scale: 0.9 }}
-            onClick={() => setShowPaywall(true)}
+            onClick={() => handleOpenPaywall()}
             style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)", border: "none", borderRadius: 12, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,158,11,0.3)" }}>
             <Crown size={20} color="#fff" />
           </motion.button>
@@ -483,8 +488,8 @@ export default function HomeScreen({ onNavigate }) {
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
-        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={user?.is_premium} onOpenPaywall={() => setShowPaywall(true)} />}
-        {showPaywall && <Paywall onClose={() => setShowPaywall(false)} user={user} />}
+        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={user?.is_premium} onOpenPaywall={() => handleOpenPaywall()} />}
+        {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
         {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
       </AnimatePresence>
     </div>
