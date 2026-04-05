@@ -48,7 +48,10 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
     }
   };
 
-  const conditionLabels = (user?.conditions || []).map(c => c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()));
+  const conditionLabels = (user?.conditions || []).map(c => {
+    const special = { pcos: "PCOS", ibs: "IBS", type2_diabetes: "Type 2 Diabetes" };
+    return special[c] || c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+  });
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", paddingBottom: 80, paddingTop: 56 }}>

@@ -150,10 +150,10 @@ function AppContent() {
       {/* Bottom Navigation */}
       <div style={{
         position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480, background: "rgba(255,255,255,0.95)",
+        width: "100%", maxWidth: 480, background: "rgba(255,255,255,0.97)",
         backdropFilter: "blur(20px)", borderTop: "1px solid #E8E6FF",
         padding: "12px 24px 24px", display: "flex", justifyContent: "space-around",
-        alignItems: "center", zIndex: 50
+        alignItems: "center", zIndex: 9000
       }}>
         {[
           { id: "home", icon: <Home size={22} />, label: "Home" },
@@ -165,7 +165,7 @@ function AppContent() {
             data-testid={`nav-${tab.id}`}
             whileTap={{ scale: 0.9 }}
             onClick={() => setActiveTab(tab.id)}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "4px 16px" }}>
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "4px 20px", position: "relative", zIndex: 9001 }}>
             <div style={{ color: activeTab === tab.id ? "#534AB7" : "#A09FAD", transition: "color 0.3s" }}>
               {tab.icon}
             </div>

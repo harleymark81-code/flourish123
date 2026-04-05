@@ -38,6 +38,10 @@ html {
   to { transform: rotate(360deg); }
 }
 
+.loading-spinner {
+  animation: spin 0.8s linear infinite;
+}
+
 /* Pulse animation for loading */
 @keyframes pulse {
   0%, 100% { opacity: 1; }

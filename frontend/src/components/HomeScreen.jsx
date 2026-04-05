@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Camera, Crown, Flame, ChevronRight, Star, Zap } from "lucide-react";
+import { Camera, Crown, Flame, ChevronRight, Star, Heart } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import FoodRating from "./FoodRating";
 import BarcodeScanner from "./BarcodeScanner";
 import MealPlanner from "./MealPlanner";
 import Paywall from "./Paywall";
+import SymptomTracker from "./SymptomTracker";
 
 const QUICK_PICKS = [
   { name: "Oat milk", emoji: "🥛" },
@@ -44,6 +45,7 @@ export default function HomeScreen({ onNavigate }) {
   const [showScanner, setShowScanner] = useState(false);
   const [showMealPlanner, setShowMealPlanner] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSymptoms, setShowSymptoms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [streakReward, setStreakReward] = useState(null);
   const [showReward, setShowReward] = useState(false);
@@ -381,10 +383,9 @@ export default function HomeScreen({ onNavigate }) {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               style={{ background: "#F8F7FF", borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "center" }}>
-              <motion.div
-                animate={{ scale: [0.95, 1.05, 0.95] }}
-                transition={{ duration: 0.6, repeat: Infinity }}
-                style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid #534AB7", borderTopColor: "transparent", margin: "0 auto 12px", animation: "spin 0.8s linear infinite" }}
+              <div
+                className="loading-spinner"
+                style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid #534AB7", borderTopColor: "transparent", margin: "0 auto 12px" }}
               />
               <AnimatePresence mode="wait">
                 <motion.p
@@ -466,11 +467,25 @@ export default function HomeScreen({ onNavigate }) {
         )}
       </div>
 
+      {/* Symptom check-in button */}
+      <motion.button
+        data-testid="symptom-checkin-btn"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3, type: "spring" }}
+        whileTap={{ scale: 0.97 }}
+        onClick={() => setShowSymptoms(true)}
+        style={{ position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)", maxWidth: 440, width: "calc(100% - 40px)", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", zIndex: 40, boxShadow: "0 4px 16px rgba(83,74,183,0.08)" }}>
+        <Heart size={16} color="#534AB7" />
+        <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
+      </motion.button>
+
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
         {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={user?.is_premium} onOpenPaywall={() => setShowPaywall(true)} />}
         {showPaywall && <Paywall onClose={() => setShowPaywall(false)} user={user} />}
+        {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
       </AnimatePresence>
     </div>
   );
