@@ -1,34 +1,72 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.App {
+  min-height: 100vh;
+  background: #ffffff;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+body {
+  margin: 0;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+  background: #ffffff;
+  color: #1A1A24;
 }
 
-.App-link {
-    color: #61dafb;
+/* Import Outfit font */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+
+/* Scrollbar hide */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Score circle spin animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Pulse animation for loading */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Animations */
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Input focus styles */
+input:focus, textarea:focus {
+  border-color: #534AB7 !important;
+  box-shadow: 0 0 0 3px rgba(83,74,183,0.15) !important;
+}
+
+/* Button base */
+button {
+  font-family: inherit;
+}
+
+/* Safe area for mobile */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 24px);
 }
