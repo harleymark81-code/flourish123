@@ -233,7 +233,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
   };
 
   const handleShare = async () => {
-    const text = `I just rated ${rating.food_name || rating.name} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://food-wellness-score.preview.emergentagent.com`;
+    const text = `I just rated ${rating.food_name || rating.name} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app`;
     if (navigator.share) {
       await navigator.share({ title: "Flourish Food Rating", text }).catch(() => {});
     } else {
