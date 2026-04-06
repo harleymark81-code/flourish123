@@ -62,17 +62,16 @@ FREE_DAILY_SCANS = 3
 app = FastAPI(title="Flourish API")
 api_router = APIRouter(prefix="/api")
 
-_netlify_url = "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app"
-_cors_origins = os.environ.get("CORS_ORIGINS", "*")
-if _cors_origins == "*":
-    _allow_origins = [
-        _netlify_url,
-        os.environ.get("FRONTEND_URL", "http://localhost:3000"),
-        "http://localhost:3000",
-    ]
-else:
-    _allow_origins = [o.strip() for o in _cors_origins.split(",")]
-    _allow_origins += [_netlify_url, os.environ.get("FRONTEND_URL", "http://localhost:3000"), "http://localhost:3000"]
+_allow_origins = [
+    "https://theflourishapp.netlify.app",
+    "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app",
+    "https://flourish123-production.up.railway.app",
+    "http://localhost:3000",
+]
+# Allow additional origins via env var (comma-separated)
+_extra = os.environ.get("CORS_ORIGINS", "")
+if _extra:
+    _allow_origins += [o.strip() for o in _extra.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,

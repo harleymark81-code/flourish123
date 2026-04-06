@@ -23,7 +23,7 @@ export default function AffiliateDashboard() {
     { label: "Commission Earned", value: "£0.00", icon: <DollarSign size={20} />, color: "#F59E0B" },
   ];
 
-  const affiliateLink = `https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app?ref=${refCode || "YOUR_CODE"}`;
+  const affiliateLink = `https://theflourishapp.netlify.app?ref=${refCode || "YOUR_CODE"}`;
 
   const handleShare = async () => {
     if (navigator.share) {
