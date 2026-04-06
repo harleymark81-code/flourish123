@@ -30,7 +30,14 @@ export default function AuthScreen() {
         await register(email, password, name);
       }
     } catch (err) {
-      setError(formatApiError(err.response?.data?.detail) || err.message);
+      if (err.response?.data?.detail) {
+        setError(formatApiError(err.response.data.detail));
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
+      console.error("[Flourish] Auth error:", err);
     } finally {
       setLoading(false);
     }
