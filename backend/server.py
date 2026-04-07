@@ -23,7 +23,7 @@ ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
 
 async def call_anthropic(system: str, user_msg: str) -> str:
     """Call Anthropic API directly using httpx."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY not set in environment")
     async with httpx.AsyncClient(timeout=60.0) as client:
