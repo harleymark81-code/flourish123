@@ -19,13 +19,13 @@ from datetime import datetime, timezone, timedelta
 import httpx
 # Direct Anthropic API helper (no third-party wrapper needed)
 
-ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
+ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
 
 async def call_anthropic(system: str, user_msg: str) -> str:
     """Call Anthropic API directly using httpx."""
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
-        raise ValueError("ANTHROPIC_API_KEY not set")
+        raise ValueError("ANTHROPIC_API_KEY not set in environment")
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -41,7 +41,9 @@ async def call_anthropic(system: str, user_msg: str) -> str:
                 "messages": [{"role": "user", "content": user_msg}],
             },
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            error_body = resp.text
+            raise ValueError(f"Anthropic API error {resp.status_code}: {error_body}")
         return resp.json()["content"][0]["text"]
 
 # ── Logging ──────────────────────────────────────────────────────────────────
