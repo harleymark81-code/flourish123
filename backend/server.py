@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, APIRouter, HTTPException, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
@@ -82,6 +82,24 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=86400,
 )
+
+@app.middleware("http")
+async def cors_preflight_handler(request: Request, call_next):
+    origin = request.headers.get("origin", "")
+    allowed = origin in _allow_origins
+    if request.method == "OPTIONS":
+        response = Response()
+        response.headers["Access-Control-Allow-Origin"] = origin if allowed else ""
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Max-Age"] = "86400"
+        return response
+    response = await call_next(request)
+    if allowed:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # ── PyObjectId helper ──────────────────────────────────────────────────────────
 def oid(v: Any) -> str:
