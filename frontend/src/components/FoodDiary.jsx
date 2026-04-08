@@ -255,7 +255,7 @@ export default function FoodDiary({ onOpenPaywall }) {
       <AnimatePresence>
         {confirmDelete && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            style={{ position: "fixed", inset: 0, zIndex: 9500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
               style={{ background: "#fff", borderRadius: 20, padding: 24, maxWidth: 320, width: "100%", textAlign: "center" }}>
               <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Remove from diary?</p>
