@@ -132,6 +132,19 @@ function getScoreColor(score) {
   return "#A32D2D";
 }
 
+const NUDGE_MESSAGES = [
+  "You've already spent £4.50 on that coffee. Your hormones are still waiting.",
+  "Every meal without Flourish is a guess. How many guesses can your body afford?",
+  "You googled your symptoms. You deserve better than that.",
+  "Counting calories while ignoring hormones is like fixing a leak with a bucket.",
+  "You wouldn't take someone else's prescription. Why follow someone else's diet?",
+  "Less than 43p a day. That's what knowing exactly what to eat costs.",
+  "One nutritionist appointment costs £80. Flourish costs £12.99 a month. Forever.",
+  "Your condition doesn't take days off. Your food intelligence shouldn't either.",
+  "Every day you eat blind is a day your hormones pay the price.",
+  "Still guessing? For £12.99 a month, that's the most expensive thing you own.",
+];
+
 export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   const { user, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
@@ -145,13 +158,16 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   const [showSymptoms, setShowSymptoms] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [nudgeMsg, setNudgeMsg] = useState(null);
 
   const handleOpenPaywall = (entry = "default") => {
     if (onOpenPaywall) onOpenPaywall(entry);
     else setShowPaywallLocal(true);
   };
 
-  const quickPicks = useMemo(() => getConditionPicks(user?.conditions), [user?.conditions?.join(",")]);
+  const conditionsKey = (user?.conditions || []).join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quickPicks = useMemo(() => getConditionPicks(user?.conditions), [conditionsKey]);
   const [streakReward, setStreakReward] = useState(null);
   const [showReward, setShowReward] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);
@@ -175,7 +191,17 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
     loadDailyTip();
     loadRecentRatings();
     checkStreakReward();
-  }, []);
+    // Nudge banner for free users every 2–3 sessions
+    if (!user?.is_premium) {
+      const count = parseInt(sessionStorage.getItem("fl_session_count") || "0", 10) + 1;
+      sessionStorage.setItem("fl_session_count", String(count));
+      const threshold = 2 + Math.round(Math.random()); // 2 or 3
+      if (count % threshold === 0) {
+        const msg = NUDGE_MESSAGES[Math.floor(Math.random() * NUDGE_MESSAGES.length)];
+        setTimeout(() => setNudgeMsg(msg), 3000);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStats = async () => {
     try {
@@ -356,6 +382,34 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
                 Share my streak
               </motion.button>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Nudge Banner */}
+      <AnimatePresence>
+        {nudgeMsg && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 28 } }}
+            exit={{ y: 80, opacity: 0 }}
+            style={{ position: "fixed", bottom: 90, left: 0, right: 0, zIndex: 9100, display: "flex", justifyContent: "center", padding: "0 16px" }}>
+            <div style={{ maxWidth: 448, width: "100%", background: "#1A1A24", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.35)" }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: "#fff", fontSize: 13, lineHeight: 1.5, margin: "0 0 10px", fontWeight: 500 }}>{nudgeMsg}</p>
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => { setNudgeMsg(null); handleOpenPaywall("nudge"); }}
+                  style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  Unlock Flourish Premium
+                </motion.button>
+              </div>
+              <button
+                onClick={() => setNudgeMsg(null)}
+                style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: "rgba(255,255,255,0.6)", fontSize: 16, lineHeight: 1 }}>
+                ×
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

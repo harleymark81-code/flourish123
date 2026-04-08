@@ -31,6 +31,19 @@ const TESTIMONIALS = [
   { name: "Jade", condition: "Thyroid", text: "I scanned my breakfast and finally understood why I felt terrible every morning." }
 ];
 
+const NUDGE_QUOTES = [
+  "You've already spent £4.50 on that coffee. Your hormones are still waiting.",
+  "Every meal without Flourish is a guess. How many guesses can your body afford?",
+  "You googled your symptoms. You deserve better than that.",
+  "Counting calories while ignoring hormones is like fixing a leak with a bucket.",
+  "You wouldn't take someone else's prescription. Why follow someone else's diet?",
+  "Less than 43p a day. That's what knowing exactly what to eat costs.",
+  "One nutritionist appointment costs £80. Flourish costs £12.99 a month. Forever.",
+  "Your condition doesn't take days off. Your food intelligence shouldn't either.",
+  "Every day you eat blind is a day your hormones pay the price.",
+  "Still guessing? For £12.99 a month, that's the most expensive thing you own.",
+];
+
 const BENEFITS = [
   "Rate every food you eat — never guess again.",
   "See exactly how food is affecting your hormones today.",
@@ -70,6 +83,7 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [testimonialIdx, setTestimonialIdx] = useState(0);
+  const [nudgeIdx, setNudgeIdx] = useState(() => Math.floor(Math.random() * NUDGE_QUOTES.length));
   const [showExit, setShowExit] = useState(false);
   const scrollRef = useRef(null);
 
@@ -79,8 +93,9 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
   const entryMsg = ENTRY_MESSAGES[entryPoint] || ENTRY_MESSAGES.default;
 
   useEffect(() => {
-    const interval = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 4000);
-    return () => clearInterval(interval);
+    const t = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 4000);
+    const n = setInterval(() => setNudgeIdx(i => (i + 1) % NUDGE_QUOTES.length), 5000);
+    return () => { clearInterval(t); clearInterval(n); };
   }, []);
 
   const handleSubscribe = async () => {
@@ -153,6 +168,22 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
 
             {/* Headline */}
             <h1 style={{ fontSize: 28, fontWeight: 800, color: "#1A1A24", lineHeight: 1.25, marginBottom: 10, textAlign: "center", letterSpacing: "-0.02em" }}>{headline}</h1>
+
+            {/* Rotating motivational subheadline */}
+            <div style={{ minHeight: 52, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={nudgeIdx}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.35 }}
+                  style={{ fontSize: 14, color: "#534AB7", fontWeight: 600, lineHeight: 1.5, textAlign: "center", margin: 0, fontStyle: "italic" }}>
+                  {NUDGE_QUOTES[nudgeIdx]}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+
             <p style={{ fontSize: 15, color: "#6B6A7C", lineHeight: 1.55, marginBottom: 20, textAlign: "center" }}>
               The food decisions you make today are either fuelling your condition or fighting it. Flourish tells you which.
             </p>

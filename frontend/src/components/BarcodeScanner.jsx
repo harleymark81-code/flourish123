@@ -70,7 +70,7 @@ export default function BarcodeScanner({ onResult, onClose }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 200, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 9600, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
 
       <div style={{ position: "absolute", top: 20, right: 20 }}>
         <motion.button whileTap={{ scale: 0.9 }} onClick={onClose} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "50%", width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
