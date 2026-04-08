@@ -480,7 +480,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
         transition={{ delay: 0.3, type: "spring" }}
         whileTap={{ scale: 0.97 }}
         onClick={() => setShowSymptoms(true)}
-        style={{ position: "fixed", bottom: 88, left: "50%", transform: "translateX(-50%)", maxWidth: 440, width: "calc(100% - 40px)", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", zIndex: 40, boxShadow: "0 4px 16px rgba(83,74,183,0.08)" }}>
+        style={{ position: "fixed", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))", left: "50%", transform: "translateX(-50%)", maxWidth: 440, width: "calc(100% - 40px)", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", zIndex: 8900, boxShadow: "0 4px 16px rgba(83,74,183,0.08)" }}>
         <Heart size={16} color="#534AB7" />
         <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
       </motion.button>
