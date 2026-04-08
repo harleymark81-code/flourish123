@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Crown, Flame, ChevronRight, Star, Heart } from "lucide-react";
 import axios from "axios";
@@ -8,19 +8,116 @@ import BarcodeScanner from "./BarcodeScanner";
 import MealPlanner from "./MealPlanner";
 import Paywall from "./Paywall";
 import SymptomTracker from "./SymptomTracker";
+import SubscriptionScreen from "./SubscriptionScreen";
 
-const QUICK_PICKS = [
-  { name: "Oat milk", emoji: "🥛" },
-  { name: "Greek yoghurt", emoji: "🫙" },
-  { name: "White bread", emoji: "🍞" },
-  { name: "Wild salmon", emoji: "🐟" },
-  { name: "Flaxseeds", emoji: "🌰" },
-  { name: "Diet Coke", emoji: "🥤" },
-  { name: "Soy protein shake", emoji: "💪" },
-  { name: "Bone broth", emoji: "🍲" },
-  { name: "Avocado", emoji: "🥑" },
-  { name: "Blueberries", emoji: "🫐" },
-];
+// Condition-specific food banks — randomised on each session
+const FOOD_BANK = {
+  pcos: [
+    { name: "Spearmint tea", emoji: "🍵" }, { name: "Flaxseeds", emoji: "🌰" },
+    { name: "Cinnamon oats", emoji: "🥣" }, { name: "Broccoli", emoji: "🥦" },
+    { name: "Wild salmon", emoji: "🐟" }, { name: "Mixed berries", emoji: "🫐" },
+    { name: "Walnuts", emoji: "🫙" }, { name: "Sweet potato", emoji: "🍠" },
+    { name: "Turmeric latte", emoji: "🥛" }, { name: "Lentil soup", emoji: "🍲" },
+    { name: "Pumpkin seeds", emoji: "🌻" }, { name: "Dark chocolate", emoji: "🍫" },
+    { name: "Avocado", emoji: "🥑" }, { name: "Greek yoghurt", emoji: "🫙" },
+    { name: "Chickpeas", emoji: "🫘" }, { name: "Edamame", emoji: "🟢" },
+  ],
+  thyroid: [
+    { name: "Brazil nuts", emoji: "🥜" }, { name: "Seaweed snack", emoji: "🌿" },
+    { name: "Scrambled eggs", emoji: "🥚" }, { name: "Chicken breast", emoji: "🍗" },
+    { name: "Tinned tuna", emoji: "🐟" }, { name: "Mushrooms", emoji: "🍄" },
+    { name: "Porridge oats", emoji: "🥣" }, { name: "Spinach", emoji: "🥬" },
+    { name: "Natural yoghurt", emoji: "🫙" }, { name: "Cheddar cheese", emoji: "🧀" },
+    { name: "Quinoa", emoji: "🌾" }, { name: "Sardines", emoji: "🐠" },
+    { name: "Pumpkin seeds", emoji: "🌻" }, { name: "Bone broth", emoji: "🍲" },
+    { name: "Blueberries", emoji: "🫐" }, { name: "Brown rice", emoji: "🍚" },
+  ],
+  autoimmune: [
+    { name: "Bone broth", emoji: "🍲" }, { name: "Turmeric milk", emoji: "🥛" },
+    { name: "Fresh ginger", emoji: "🫚" }, { name: "Olive oil", emoji: "🫒" },
+    { name: "Wild salmon", emoji: "🐟" }, { name: "Blueberries", emoji: "🫐" },
+    { name: "Kale", emoji: "🥬" }, { name: "Sauerkraut", emoji: "🥗" },
+    { name: "Coconut oil", emoji: "🥥" }, { name: "Green tea", emoji: "🍵" },
+    { name: "Avocado", emoji: "🥑" }, { name: "Garlic", emoji: "🧄" },
+    { name: "Pomegranate", emoji: "🍷" }, { name: "Grass-fed beef", emoji: "🥩" },
+    { name: "Fermented kimchi", emoji: "🌶️" }, { name: "Chia seeds", emoji: "🌱" },
+  ],
+  ibs: [
+    { name: "Banana", emoji: "🍌" }, { name: "White rice", emoji: "🍚" },
+    { name: "Ginger tea", emoji: "🍵" }, { name: "Cooked carrots", emoji: "🥕" },
+    { name: "Chicken breast", emoji: "🍗" }, { name: "Plain potato", emoji: "🥔" },
+    { name: "Oat milk", emoji: "🥛" }, { name: "Plain yoghurt", emoji: "🫙" },
+    { name: "Peppermint tea", emoji: "🌿" }, { name: "Boiled eggs", emoji: "🥚" },
+    { name: "Firm tofu", emoji: "⬜" }, { name: "Blueberries", emoji: "🫐" },
+    { name: "Lactose-free milk", emoji: "🥛" }, { name: "Polenta", emoji: "🌽" },
+    { name: "Canned salmon", emoji: "🐟" }, { name: "Sourdough bread", emoji: "🍞" },
+  ],
+  endometriosis: [
+    { name: "Dark leafy greens", emoji: "🥬" }, { name: "Turmeric tea", emoji: "🍵" },
+    { name: "Fresh ginger", emoji: "🫚" }, { name: "Flaxseeds", emoji: "🌰" },
+    { name: "Wild salmon", emoji: "🐟" }, { name: "Broccoli", emoji: "🥦" },
+    { name: "Walnuts", emoji: "🫙" }, { name: "Olive oil", emoji: "🫒" },
+    { name: "Green tea", emoji: "🍵" }, { name: "Raspberries", emoji: "🍓" },
+    { name: "Pumpkin", emoji: "🎃" }, { name: "Red lentils", emoji: "🫘" },
+    { name: "Pomegranate seeds", emoji: "🍷" }, { name: "Celery", emoji: "🌿" },
+    { name: "Artichoke", emoji: "🌱" }, { name: "Beetroot", emoji: "🔴" },
+  ],
+  hormonal_imbalance: [
+    { name: "Maca powder", emoji: "🌾" }, { name: "Flaxseeds", emoji: "🌰" },
+    { name: "Avocado", emoji: "🥑" }, { name: "Leafy greens", emoji: "🥬" },
+    { name: "Wild salmon", emoji: "🐟" }, { name: "Eggs", emoji: "🥚" },
+    { name: "Pumpkin seeds", emoji: "🌻" }, { name: "Soy milk", emoji: "🥛" },
+    { name: "Broccoli sprouts", emoji: "🥦" }, { name: "Dark chocolate", emoji: "🍫" },
+    { name: "Chia seeds", emoji: "🌱" }, { name: "Lentils", emoji: "🫘" },
+    { name: "Walnuts", emoji: "🫙" }, { name: "Greek yoghurt", emoji: "🫙" },
+    { name: "Tempeh", emoji: "🟫" }, { name: "Sweet potato", emoji: "🍠" },
+  ],
+  type2_diabetes: [
+    { name: "Cinnamon tea", emoji: "🍵" }, { name: "Broccoli", emoji: "🥦" },
+    { name: "Avocado", emoji: "🥑" }, { name: "Eggs", emoji: "🥚" },
+    { name: "Almonds", emoji: "🥜" }, { name: "Greek yoghurt", emoji: "🫙" },
+    { name: "Wild salmon", emoji: "🐟" }, { name: "Lentil soup", emoji: "🍲" },
+    { name: "Blueberries", emoji: "🫐" }, { name: "Quinoa", emoji: "🌾" },
+    { name: "Olive oil", emoji: "🫒" }, { name: "Chia seeds", emoji: "🌱" },
+    { name: "Spinach", emoji: "🥬" }, { name: "Apple cider vinegar", emoji: "🧪" },
+    { name: "Walnuts", emoji: "🫙" }, { name: "Chickpeas", emoji: "🫘" },
+  ],
+  general_health: [
+    { name: "Avocado", emoji: "🥑" }, { name: "Greek yoghurt", emoji: "🫙" },
+    { name: "Oat milk", emoji: "🥛" }, { name: "Wild salmon", emoji: "🐟" },
+    { name: "Flaxseeds", emoji: "🌰" }, { name: "Blueberries", emoji: "🫐" },
+    { name: "White bread", emoji: "🍞" }, { name: "Diet Coke", emoji: "🥤" },
+    { name: "Bone broth", emoji: "🍲" }, { name: "Almonds", emoji: "🥜" },
+    { name: "Sweet potato", emoji: "🍠" }, { name: "Dark chocolate", emoji: "🍫" },
+    { name: "Eggs", emoji: "🥚" }, { name: "Kimchi", emoji: "🌶️" },
+    { name: "Green tea", emoji: "🍵" }, { name: "Quinoa", emoji: "🌾" },
+  ],
+};
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getConditionPicks(conditions = []) {
+  // Merge food banks for user's conditions, deduplicate, shuffle, take 10
+  const primary = conditions[0] || "general_health";
+  const bank = FOOD_BANK[primary] || FOOD_BANK.general_health;
+  // Mix in a few from a second condition if present
+  const secondary = conditions[1] ? (FOOD_BANK[conditions[1]] || []) : [];
+  const combined = [...bank, ...secondary.slice(0, 4)];
+  const seen = new Set();
+  const unique = combined.filter(f => {
+    if (seen.has(f.name)) return false;
+    seen.add(f.name);
+    return true;
+  });
+  return shuffle(unique).slice(0, 10);
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -46,12 +143,15 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   const [showMealPlanner, setShowMealPlanner] = useState(false);
   const [showPaywallLocal, setShowPaywallLocal] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleOpenPaywall = (entry = "default") => {
     if (onOpenPaywall) onOpenPaywall(entry);
     else setShowPaywallLocal(true);
   };
+
+  const quickPicks = useMemo(() => getConditionPicks(user?.conditions), [user?.conditions?.join(",")]);
   const [streakReward, setStreakReward] = useState(null);
   const [showReward, setShowReward] = useState(false);
   const [showMilestone, setShowMilestone] = useState(false);
@@ -272,7 +372,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           <motion.button
             data-testid="crown-btn"
             whileTap={{ scale: 0.9 }}
-            onClick={() => handleOpenPaywall()}
+            onClick={() => setShowSubscription(true)}
             style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)", border: "none", borderRadius: 12, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 8px rgba(245,158,11,0.3)" }}>
             <Crown size={20} color="#fff" />
           </motion.button>
@@ -407,28 +507,15 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           )}
         </AnimatePresence>
 
-        {/* Symptom check-in banner */}
-        <motion.button
-          data-testid="symptom-checkin-btn"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.13, type: "spring" }}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => setShowSymptoms(true)}
-          style={{ width: "100%", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
-          <Heart size={16} color="#534AB7" />
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
-        </motion.button>
-
-        {/* Quick Picks */}
+        {/* Quick Picks — condition-personalised, randomised each session */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, type: "spring" }}
-          style={{ marginBottom: 20 }}>
-          <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 12 }}>Quick picks</p>
+          style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 12 }}>Quick picks for you</p>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
-            {QUICK_PICKS.map((food, i) => (
+            {quickPicks.map((food, i) => (
               <motion.button
                 key={food.name}
                 data-testid={`quick-pick-${food.name.replace(/\s+/g, "-").toLowerCase()}`}
@@ -447,6 +534,19 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             ))}
           </div>
         </motion.div>
+
+        {/* Symptom check-in banner — below quick picks */}
+        <motion.button
+          data-testid="symptom-checkin-btn"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.17, type: "spring" }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => setShowSymptoms(true)}
+          style={{ width: "100%", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
+          <Heart size={16} color="#534AB7" />
+          <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
+        </motion.button>
 
         {/* Recently Rated */}
         {recentRatings.length > 0 && (
@@ -491,6 +591,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
         {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={user?.is_premium} onOpenPaywall={() => handleOpenPaywall()} />}
         {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
         {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
+        {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => { setShowSubscription(false); handleOpenPaywall(); }} />}
       </AnimatePresence>
     </div>
   );

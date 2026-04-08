@@ -466,6 +466,7 @@ async def rate_food(data: FoodRatingRequest, current_user: dict = Depends(get_cu
 
 Food to rate: {data.food_name}
 {f'Ingredients: {data.ingredients}' if data.ingredients else ''}
+(Suggestion seed: {uuid.uuid4().hex[:8]} — always suggest fresh, varied alternatives not previously suggested)
 
 Return ONLY this exact JSON structure (no markdown, no extra text):
 {{
@@ -939,6 +940,35 @@ async def stripe_webhook(request: Request):
     except Exception as e:
         logger.error(f"Webhook error: {e}")
         return {"received": True}
+
+@api_router.post("/payments/portal")
+async def create_portal_session(current_user: dict = Depends(get_current_user)):
+    stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+    if not stripe_lib.api_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    uid = current_user.get("id") or current_user.get("_id")
+    email = current_user.get("email", "")
+    # Find customer ID from transactions
+    txn = await db.payment_transactions.find_one({"user_id": uid, "payment_status": "paid"})
+    customer_id = txn.get("stripe_customer_id") if txn else None
+    # Fallback: look up by email in Stripe
+    if not customer_id:
+        try:
+            customers = stripe_lib.Customer.list(email=email, limit=1)
+            if customers.data:
+                customer_id = customers.data[0].id
+        except Exception:
+            pass
+    if not customer_id:
+        raise HTTPException(status_code=404, detail="No Stripe customer found. Please contact support.")
+    try:
+        portal = stripe_lib.billing_portal.Session.create(
+            customer=customer_id,
+            return_url="https://theflourishapp.netlify.app/"
+        )
+        return {"url": portal.url}
+    except stripe_lib.error.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # ── REFERRAL ───────────────────────────────────────────────────────────────────
 @api_router.get("/referral/stats")
