@@ -3,7 +3,6 @@ import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";
 const API = BACKEND_URL + "/api";
-console.log("[Flourish] API base URL:", API);
 
 // ── Global axios defaults ─────────────────────────────────────────────────────
 // withCredentials must be true globally so the httpOnly auth cookie is included

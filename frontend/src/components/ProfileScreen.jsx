@@ -204,6 +204,8 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const [copied, setCopied] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [portalLoading, setPortalLoading] = useState(false);
   const isPremium = user?.is_premium;
 
   useEffect(() => {
@@ -247,15 +249,27 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
     }
   };
 
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await axios.post(`${API}/payments/portal`, {}, { headers: getHeaders(), withCredentials: true });
+      window.location.href = res.data.url;
+    } catch (e) {
+      console.error("[Flourish] portal error:", e);
+      setPortalLoading(false);
+    }
+  };
+
   const handleDeleteAccount = async () => {
     setDeleting(true);
+    setDeleteError("");
     try {
       await axios.delete(`${API}/auth/account`, { headers: getHeaders(), withCredentials: true });
       logout();
     } catch (e) {
       console.error("[Flourish] deleteAccount error:", e);
       setDeleting(false);
-      setShowDeleteConfirm(false);
+      setDeleteError(e.response?.data?.detail || "Failed to delete account. Please try again or contact support.");
     }
   };
 
@@ -397,6 +411,21 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
         {/* Cycle Tracking */}
         <CycleTrackingCard getHeaders={getHeaders} API={API} cycleEnabled={user?.cycle_tracking} />
 
+        {/* Manage subscription — premium only */}
+        {isPremium && (
+          <motion.div whileTap={{ scale: 0.97 }} onClick={handleManageSubscription}
+            style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: portalLoading ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, opacity: portalLoading ? 0.7 : 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Crown size={18} color="#F59E0B" />
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>{portalLoading ? "Opening portal..." : "Manage subscription"}</p>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Cancel, upgrade or view billing</p>
+              </div>
+            </div>
+            <ChevronRight size={16} color="#534AB7" />
+          </motion.div>
+        )}
+
         {/* Affiliate Link */}
         <motion.div whileTap={{ scale: 0.97 }} onClick={() => window.location.href = "/affiliate"}
           style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -447,6 +476,11 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
                   </p>
                 </div>
               </div>
+              {deleteError && (
+                <div style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{deleteError}</p>
+                </div>
+              )}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={handleDeleteAccount}
@@ -455,7 +489,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
                 {deleting ? "Deleting..." : "Yes, delete my account"}
               </motion.button>
               <button
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => { setShowDeleteConfirm(false); setDeleteError(""); }}
                 style={{ width: "100%", background: "none", border: "none", color: "var(--text-secondary)", fontSize: 14, cursor: "pointer", padding: "8px 0" }}>
                 Cancel
               </button>

@@ -14,16 +14,26 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
   const { getHeaders, API } = useAuth();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
 
-  useEffect(() => { fetchPlan(); }, []);
+  useEffect(() => { fetchPlan(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchPlan = async () => {
     setLoading(true);
+    setFetchError(false);
     try {
       const res = await axios.post(`${API}/food/meal-plan`, {}, { headers: getHeaders(), withCredentials: true });
       setPlan(res.data);
-    } catch (e) {}
-    setLoading(false);
+    } catch (e) {
+      if (e.response?.status === 403) {
+        onClose();
+        onOpenPaywall && onOpenPaywall("meal_plan");
+      } else {
+        setFetchError(true);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const meals = plan ? [
@@ -66,6 +76,16 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
               <RefreshCw size={32} color="#534AB7" />
             </motion.div>
             <p style={{ color: "var(--text-secondary)", marginTop: 12 }}>Getting your personalised meal plan...</p>
+          </div>
+        ) : fetchError ? (
+          <div style={{ textAlign: "center", padding: 40 }}>
+            <p style={{ fontSize: 32, marginBottom: 12 }}>😔</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px" }}>Couldn't load your meal plan</p>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 20px" }}>Check your connection and try again.</p>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={fetchPlan}
+              style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontWeight: 700, cursor: "pointer" }}>
+              Try again
+            </motion.button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

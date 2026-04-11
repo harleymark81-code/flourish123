@@ -238,7 +238,7 @@ export default function FoodDiary({ onOpenPaywall }) {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name || entry.name}</p>
-                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.3 }}>{(entry.verdict || "").slice(0, 55)}...</p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.3 }}>{entry.verdict && entry.verdict.length > 55 ? entry.verdict.slice(0, 55) + "…" : (entry.verdict || "")}</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>

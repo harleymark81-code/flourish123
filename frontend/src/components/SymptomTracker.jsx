@@ -23,6 +23,7 @@ export default function SymptomTracker({ onClose }) {
   const { getHeaders, API } = useAuth();
   const [scores, setScores] = useState(DEFAULT_SCORES);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [todayData, setTodayData] = useState(null);
 
   useEffect(() => {
@@ -51,12 +52,14 @@ export default function SymptomTracker({ onClose }) {
   };
 
   const handleSave = async () => {
+    setSaveError(false);
     try {
       await axios.post(`${API}/symptoms`, scores, { headers: getHeaders(), withCredentials: true });
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 1500);
     } catch (e) {
       console.error("[Flourish] SymptomTracker save error:", e);
+      setSaveError(true);
     }
   };
 
@@ -142,12 +145,17 @@ export default function SymptomTracker({ onClose }) {
 
         {/* Fixed footer button */}
         <div style={{ padding: "16px 20px 20px", flexShrink: 0 }}>
+          {saveError && (
+            <p style={{ fontSize: 13, color: "#A32D2D", margin: "0 0 8px", textAlign: "center" }}>
+              Couldn't save your check-in. Please try again.
+            </p>
+          )}
           <motion.button
             data-testid="save-symptoms-btn"
             whileTap={{ scale: 0.97 }}
             onClick={handleSave}
-            style={{ width: "100%", background: saved ? "#639922" : "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 600, cursor: "pointer", transition: "background 0.3s" }}>
-            {saved ? "Saved!" : "Save check-in"}
+            style={{ width: "100%", background: saved ? "#639922" : saveError ? "#A32D2D" : "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "16px", fontSize: 16, fontWeight: 600, cursor: "pointer", transition: "background 0.3s" }}>
+            {saved ? "Saved!" : saveError ? "Try again" : "Save check-in"}
           </motion.button>
         </div>
       </motion.div>

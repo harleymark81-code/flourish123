@@ -5,8 +5,8 @@ import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
 const FEATURES_FREE = [
-  "5 food ratings per day",
-  "Naturalness & hormonal scores",
+  "3 food ratings per day",
+  "Overall score + Naturalness dimension",
   "First warning flag",
   "Daily AI food tip",
 ];
@@ -100,7 +100,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
             {isPremium ? (
               <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", margin: 0 }}>{planPrice} · Renews automatically</p>
             ) : (
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>5 food ratings per day · Upgrade to unlock everything</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>3 food ratings per day · Upgrade to unlock everything</p>
             )}
           </div>
 

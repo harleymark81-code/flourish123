@@ -251,7 +251,11 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
       }, { headers: getHeaders(), withCredentials: true });
       setIsFavourite(res.data.saved);
     } catch (e) {
-      console.error("[Flourish] toggleFavourite error:", e);
+      if (e.response?.status === 403) {
+        onOpenPaywall && onOpenPaywall("favourites");
+      } else {
+        console.error("[Flourish] toggleFavourite error:", e);
+      }
     } finally {
       setSavingFav(false);
     }
@@ -289,6 +293,15 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
         barcode: rating.barcode
       }, { headers: getHeaders(), withCredentials: true });
       setLogged(true);
+    } catch (e) {
+      if (e.response?.status === 403) {
+        onOpenPaywall && onOpenPaywall("diary");
+      } else {
+        console.error("[Flourish] handleLog error:", e);
+      }
+      return;
+    }
+    try {
       if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
       const newParticles = Array.from({ length: 14 }, (_, i) => ({
         id: i,

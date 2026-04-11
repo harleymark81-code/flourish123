@@ -35,6 +35,7 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
   const [loadingShop, setLoadingShop] = useState(true);
   const [addingItem, setAddingItem] = useState(false);
   const [historyFilter, setHistoryFilter] = useState("");
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     loadFavourites();
@@ -81,6 +82,8 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
       setFavourites(prev => prev.filter(f => f.food_name !== foodName));
     } catch (e) {
       console.error("[Flourish] removeFavourite error:", e);
+      setActionError("Couldn't remove favourite. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
     }
   };
 
@@ -93,6 +96,8 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
       setNewItem("");
     } catch (e) {
       console.error("[Flourish] addShoppingItem error:", e);
+      setActionError("Couldn't add item. Please try again.");
+      setTimeout(() => setActionError(""), 3000);
     } finally {
       setAddingItem(false);
     }
@@ -174,6 +179,16 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
       </div>
 
       <div style={{ padding: "16px 20px" }}>
+        <AnimatePresence>
+          {actionError && (
+            <motion.div
+              key="action-error"
+              initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{actionError}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <AnimatePresence mode="wait">
           {/* ── FAVOURITES ── */}
           {activeTab === "favourites" && (

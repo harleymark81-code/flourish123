@@ -41,6 +41,7 @@ export default function Onboarding({ onComplete }) {
   const [challenge, setChallenge] = useState("");
   const [severity, setSeverity] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const { user, updateProfile } = useAuth();
 
   useEffect(() => {
@@ -66,6 +67,7 @@ export default function Onboarding({ onComplete }) {
 
   const handleComplete = async () => {
     setSaving(true);
+    setSaveError("");
     try {
       await updateProfile({
         conditions: selectedConditions,
@@ -78,6 +80,7 @@ export default function Onboarding({ onComplete }) {
       onComplete();
     } catch (e) {
       console.error(e);
+      setSaveError("Something went wrong saving your profile. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -340,6 +343,11 @@ export default function Onboarding({ onComplete }) {
                 </p>
               </div>
 
+              {saveError && (
+                <p style={{ fontSize: 13, color: "#A32D2D", background: "rgba(163,45,45,0.08)", borderRadius: 10, padding: "10px 14px", width: "100%", margin: "0 0 12px", boxSizing: "border-box" }}>
+                  {saveError}
+                </p>
+              )}
               <motion.button
                 data-testid="onboarding-complete-btn"
                 whileTap={{ scale: 0.97 }}

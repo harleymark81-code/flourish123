@@ -113,6 +113,7 @@ export default function BarcodeScanner({ onResult, onClose }) {
               data-testid="manual-barcode-input"
               value={manualBarcode}
               onChange={e => setManualBarcode(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && manualBarcode.trim()) { stopCamera(); onResult(manualBarcode.trim()); } }}
               placeholder="Enter barcode number..."
               style={{ flex: 1, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 15, outline: "none" }}
             />
