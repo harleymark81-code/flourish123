@@ -458,7 +458,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             transition={{ type: "spring", damping: 20 }}
             style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", boxShadow: "0 2px 12px rgba(83,74,183,0.08)", marginBottom: 16 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Today at a glance</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: !stats.is_premium ? 14 : 0 }}>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 22, fontWeight: 700, color: stats.monthly_avg >= 70 ? "#639922" : stats.monthly_avg >= 40 ? "#BA7517" : "#A32D2D", margin: 0 }}>{stats.monthly_avg}</p>
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Avg Score</p>
@@ -479,6 +479,35 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Left today</p>
               </div>
             </div>
+            {/* Scan progress bar — free users only */}
+            {!stats.is_premium && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                  <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>
+                    {stats.today_ratings} of {stats.daily_limit} free scans used today
+                  </span>
+                  {stats.remaining_ratings === 0 && (
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => onOpenPaywall("scan_limit")}
+                      style={{ fontSize: 10, fontWeight: 700, color: "#534AB7", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                      Unlock unlimited
+                    </motion.button>
+                  )}
+                </div>
+                <div style={{ background: "var(--border)", borderRadius: 4, height: 5, overflow: "hidden" }}>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min((stats.today_ratings / stats.daily_limit) * 100, 100)}%` }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                    style={{
+                      height: "100%", borderRadius: 4,
+                      background: stats.remaining_ratings === 0 ? "#A32D2D" : stats.remaining_ratings <= 1 ? "#BA7517" : "#534AB7"
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 

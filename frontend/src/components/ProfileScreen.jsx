@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check } from "lucide-react";
+import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
@@ -9,6 +9,8 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const [stats, setStats] = useState(null);
   const [referralStats, setReferralStats] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isPremium = user?.is_premium;
 
   useEffect(() => {
@@ -52,6 +54,22 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      await axios.delete(`${API}/auth/account`, { headers: getHeaders(), withCredentials: true });
+      logout();
+    } catch (e) {
+      console.error("[Flourish] deleteAccount error:", e);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+    : null;
+
   const conditionLabels = (user?.conditions || []).map(c => {
     const special = { pcos: "PCOS", ibs: "IBS", type2_diabetes: "Type 2 Diabetes" };
     return special[c] || c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
@@ -82,6 +100,9 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
               <div>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "#fff", margin: 0 }}>{user?.name}</p>
                 <p style={{ fontSize: 14, color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>{user?.email}</p>
+                {memberSince && (
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", margin: "2px 0 0" }}>Member since {memberSince}</p>
+                )}
                 {isPremium && (
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
                     <Crown size={14} color="#F59E0B" />
@@ -189,7 +210,63 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
           </div>
           <ChevronRight size={16} color="#534AB7" />
         </motion.div>
+
+        {/* Delete account */}
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={() => setShowDeleteConfirm(true)}
+          style={{ width: "100%", background: "none", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 12, padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 20 }}>
+          <Trash2 size={14} color="#A32D2D" />
+          <span style={{ fontSize: 13, color: "#A32D2D", fontWeight: 600 }}>Delete account</span>
+        </motion.button>
+
+        <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", paddingBottom: 8 }}>
+          Flourish v1.0 · AI-powered food intelligence
+        </p>
       </div>
+
+      {/* Delete account confirm modal */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: "fixed", inset: 0, zIndex: 9700, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+            onClick={e => e.target === e.currentTarget && setShowDeleteConfirm(false)}>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0, transition: { type: "spring", damping: 28, stiffness: 280 } }}
+              exit={{ y: "100%" }}
+              style={{ background: "var(--bg-elevated)", borderRadius: "24px 24px 0 0", padding: "28px 24px 40px", width: "100%", maxWidth: 480 }}>
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: "var(--border)", margin: "0 auto 24px" }} />
+              <div style={{ display: "flex", gap: 14, marginBottom: 16 }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(163,45,45,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <AlertTriangle size={24} color="#A32D2D" />
+                </div>
+                <div>
+                  <p style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>Delete account?</p>
+                  <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: "6px 0 0", lineHeight: 1.5 }}>
+                    This will permanently delete your account and all data including diary, symptoms, and progress. This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={handleDeleteAccount}
+                disabled={deleting}
+                style={{ width: "100%", background: "#A32D2D", color: "#fff", border: "none", borderRadius: 14, padding: "16px", fontWeight: 700, fontSize: 15, cursor: "pointer", marginBottom: 10, opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? "Deleting..." : "Yes, delete my account"}
+              </motion.button>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{ width: "100%", background: "none", border: "none", color: "var(--text-secondary)", fontSize: 14, cursor: "pointer", padding: "8px 0" }}>
+                Cancel
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

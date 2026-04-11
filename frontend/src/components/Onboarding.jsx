@@ -24,6 +24,7 @@ const GOALS = [
 
 const DURATIONS = ["Less than a year", "1 to 3 years", "More than 3 years"];
 const CHALLENGES = ["Knowing what to avoid", "Finding alternatives", "Eating out", "Understanding labels"];
+const SEVERITIES = ["Mild", "Moderate", "Severe"];
 
 const TAGLINES = [
   "Personalised for PCOS.",
@@ -38,6 +39,7 @@ export default function Onboarding({ onComplete }) {
   const [selectedGoals, setSelectedGoals] = useState([]);
   const [duration, setDuration] = useState("");
   const [challenge, setChallenge] = useState("");
+  const [severity, setSeverity] = useState("");
   const [saving, setSaving] = useState(false);
   const { user, updateProfile } = useAuth();
 
@@ -70,6 +72,7 @@ export default function Onboarding({ onComplete }) {
         goals: selectedGoals,
         managing_duration: duration,
         food_challenge: challenge,
+        severity: severity.toLowerCase(),
         onboarding_completed: true
       });
       onComplete();
@@ -260,7 +263,7 @@ export default function Onboarding({ onComplete }) {
               </div>
 
               <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>What's your biggest food challenge?</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
                 {CHALLENGES.map(c => (
                   <motion.div
                     key={c}
@@ -274,6 +277,24 @@ export default function Onboarding({ onComplete }) {
                       cursor: "pointer", transition: "all 0.3s"
                     }}>
                     <p style={{ margin: 0, fontWeight: 600, color: challenge === c ? "#fff" : "#1A1A24" }}>{c}</p>
+                  </motion.div>
+                ))}
+              </div>
+
+              <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>How severe are your symptoms? <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-muted)" }}>(optional)</span></p>
+              <div style={{ display: "flex", gap: 8, marginBottom: 32 }}>
+                {SEVERITIES.map(s => (
+                  <motion.div
+                    key={s}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setSeverity(severity === s ? "" : s)}
+                    style={{
+                      flex: 1, padding: "12px 8px", borderRadius: 12, textAlign: "center",
+                      border: `2px solid ${severity === s ? "#534AB7" : "var(--border)"}`,
+                      background: severity === s ? "#534AB7" : "var(--bg-card)",
+                      cursor: "pointer", transition: "all 0.3s"
+                    }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: severity === s ? "#fff" : "#1A1A24" }}>{s}</p>
                   </motion.div>
                 ))}
               </div>

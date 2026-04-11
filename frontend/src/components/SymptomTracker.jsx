@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, Zap, Brain, Sun, Smile, Star } from "lucide-react";
+import { X, Zap, Brain, Sun, Smile, Star, Moon, Leaf, Flame } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
 const SYMPTOM_ITEMS = [
-  { key: "energy", label: "Energy", icon: <Zap size={20} />, color: "#F59E0B" },
-  { key: "bloating", label: "Bloating", icon: <Star size={20} />, color: "#639922" },
-  { key: "brain_fog", label: "Brain fog", icon: <Brain size={20} />, color: "#534AB7" },
-  { key: "mood", label: "Mood", icon: <Smile size={20} />, color: "#F97316" },
-  { key: "skin", label: "Skin", icon: <Sun size={20} />, color: "#EC4899" },
+  { key: "energy",    label: "Energy",     icon: <Zap size={20} />,   color: "#F59E0B" },
+  { key: "bloating",  label: "Bloating",   icon: <Star size={20} />,  color: "#639922" },
+  { key: "brain_fog", label: "Brain fog",  icon: <Brain size={20} />, color: "#534AB7" },
+  { key: "mood",      label: "Mood",       icon: <Smile size={20} />, color: "#F97316" },
+  { key: "skin",      label: "Skin",       icon: <Sun size={20} />,   color: "#EC4899" },
+  { key: "sleep",     label: "Sleep",      icon: <Moon size={20} />,  color: "#756AD9" },
+  { key: "pain",      label: "Pain/Cramps",icon: <Flame size={20} />, color: "#A32D2D" },
+  { key: "digestive", label: "Digestive",  icon: <Leaf size={20} />,  color: "#639922" },
 ];
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "😊"];
 
+const DEFAULT_SCORES = { energy: 3, bloating: 3, brain_fog: 3, mood: 3, skin: 3, sleep: 3, pain: 3, digestive: 3 };
+
 export default function SymptomTracker({ onClose }) {
   const { getHeaders, API } = useAuth();
-  const [scores, setScores] = useState({ energy: 3, bloating: 3, brain_fog: 3, mood: 3, skin: 3 });
+  const [scores, setScores] = useState(DEFAULT_SCORES);
   const [saved, setSaved] = useState(false);
   const [todayData, setTodayData] = useState(null);
 
@@ -30,11 +35,14 @@ export default function SymptomTracker({ onClose }) {
       if (res.data) {
         setTodayData(res.data);
         setScores({
-          energy: res.data.energy || 3,
-          bloating: res.data.bloating || 3,
+          energy:    res.data.energy    || 3,
+          bloating:  res.data.bloating  || 3,
           brain_fog: res.data.brain_fog || 3,
-          mood: res.data.mood || 3,
-          skin: res.data.skin || 3
+          mood:      res.data.mood      || 3,
+          skin:      res.data.skin      || 3,
+          sleep:     res.data.sleep     || 3,
+          pain:      res.data.pain      || 3,
+          digestive: res.data.digestive || 3,
         });
       }
     } catch (e) {

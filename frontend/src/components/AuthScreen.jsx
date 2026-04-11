@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
 function formatApiError(detail) {
@@ -11,20 +12,24 @@ function formatApiError(detail) {
 }
 
 export default function AuthScreen() {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState("login");
+  const { login, register, API } = useAuth();
+  const [mode, setMode] = useState("login");  // login | register | forgot
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     try {
-      if (mode === "login") {
+      if (mode === "forgot") {
+        await axios.post(`${API}/auth/forgot-password`, { email });
+        setForgotSent(true);
+      } else if (mode === "login") {
         await login(email, password);
       } else {
         await register(email, password, name);
@@ -54,72 +59,108 @@ export default function AuthScreen() {
         <p style={{ fontSize: 15, color: "var(--text-secondary)", marginTop: 4 }}>Food intelligence for your health</p>
       </div>
 
-      {/* Toggle */}
-      <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 12, padding: 4, marginBottom: 28, border: "1px solid var(--border)" }}>
-        {["login", "register"].map(m => (
-          <button key={m} onClick={() => { setMode(m); setError(""); }}
-            style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: mode === m ? "var(--bg-elevated)" : "transparent", fontWeight: 600, fontSize: 15, color: mode === m ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", boxShadow: mode === m ? "0 2px 8px rgba(83,74,183,0.1)" : "none", transition: "all 0.3s" }}>
-            {m === "login" ? "Sign in" : "Create account"}
-          </button>
-        ))}
-      </div>
+      {/* Toggle — only show for login/register, not forgot */}
+      {mode !== "forgot" && (
+        <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 12, padding: 4, marginBottom: 28, border: "1px solid var(--border)" }}>
+          {["login", "register"].map(m => (
+            <button key={m} onClick={() => { setMode(m); setError(""); setForgotSent(false); }}
+              style={{ flex: 1, padding: "10px", borderRadius: 10, border: "none", background: mode === m ? "var(--bg-elevated)" : "transparent", fontWeight: 600, fontSize: 15, color: mode === m ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", boxShadow: mode === m ? "0 2px 8px rgba(83,74,183,0.1)" : "none", transition: "all 0.3s" }}>
+              {m === "login" ? "Sign in" : "Create account"}
+            </button>
+          ))}
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <AnimatePresence>
-          {mode === "register" && (
-            <motion.input
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              data-testid="register-name-input"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Your name"
-              style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)", transition: "border 0.3s" }}
+      {/* Forgot password mode */}
+      {mode === "forgot" && (
+        <div style={{ marginBottom: 24 }}>
+          <button onClick={() => { setMode("login"); setError(""); setForgotSent(false); }}
+            style={{ background: "none", border: "none", color: "#534AB7", fontWeight: 600, fontSize: 14, cursor: "pointer", padding: "0 0 12px", display: "flex", alignItems: "center", gap: 4 }}>
+            ← Back to sign in
+          </button>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 8px" }}>Reset your password</h2>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>Enter your email and we'll send instructions to reset your password.</p>
+        </div>
+      )}
+
+      {forgotSent ? (
+        <div style={{ background: "rgba(99,153,34,0.08)", border: "1px solid rgba(99,153,34,0.2)", borderRadius: 14, padding: 20, textAlign: "center" }}>
+          <p style={{ fontSize: 16, fontWeight: 700, color: "#639922", margin: "0 0 6px" }}>Check your email</p>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: "0 0 16px" }}>If an account exists for {email}, you'll receive reset instructions shortly.</p>
+          <button onClick={() => { setMode("login"); setForgotSent(false); setEmail(""); }}
+            style={{ background: "none", border: "none", color: "#534AB7", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
+            Back to sign in
+          </button>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <AnimatePresence>
+            {mode === "register" && (
+              <motion.input
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                data-testid="register-name-input"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name"
+                style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)", transition: "border 0.3s" }}
+              />
+            )}
+          </AnimatePresence>
+
+          <input
+            data-testid="auth-email-input"
+            type="email"
+            required
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="Email address"
+            style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)" }}
+          />
+          {mode !== "forgot" && (
+            <input
+              data-testid="auth-password-input"
+              type="password"
+              required
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)" }}
             />
           )}
-        </AnimatePresence>
 
-        <input
-          data-testid="auth-email-input"
-          type="email"
-          required
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          placeholder="Email address"
-          style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)" }}
-        />
-        <input
-          data-testid="auth-password-input"
-          type="password"
-          required
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          placeholder="Password"
-          style={{ background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 12, padding: "15px 16px", fontSize: 15, outline: "none", color: "var(--input-text)" }}
-        />
-
-        <AnimatePresence>
-          {error && (
-            <motion.p
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              style={{ color: "#A32D2D", fontSize: 14, margin: 0, background: "rgba(163,45,45,0.08)", padding: "10px 14px", borderRadius: 10 }}>
-              {error}
-            </motion.p>
+          {mode === "login" && (
+            <div style={{ textAlign: "right" }}>
+              <button type="button" onClick={() => { setMode("forgot"); setError(""); }}
+                style={{ background: "none", border: "none", color: "#534AB7", fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                Forgot password?
+              </button>
+            </div>
           )}
-        </AnimatePresence>
 
-        <motion.button
-          data-testid="auth-submit-btn"
-          type="submit"
-          whileTap={{ scale: 0.97 }}
-          disabled={loading}
-          style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "16px 24px", fontSize: 16, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(83,74,183,0.25)", marginTop: 4 }}>
-          {loading ? "..." : mode === "login" ? "Sign in" : "Create my account"}
-        </motion.button>
-      </form>
+          <AnimatePresence>
+            {error && (
+              <motion.p
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                style={{ color: "#A32D2D", fontSize: 14, margin: 0, background: "rgba(163,45,45,0.08)", padding: "10px 14px", borderRadius: 10 }}>
+                {error}
+              </motion.p>
+            )}
+          </AnimatePresence>
+
+          <motion.button
+            data-testid="auth-submit-btn"
+            type="submit"
+            whileTap={{ scale: 0.97 }}
+            disabled={loading}
+            style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "16px 24px", fontSize: 16, fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(83,74,183,0.25)", marginTop: 4 }}>
+            {loading ? "..." : mode === "login" ? "Sign in" : mode === "forgot" ? "Send reset link" : "Create my account"}
+          </motion.button>
+        </form>
+      )}
 
       <p style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5, marginTop: 20 }}>
         By continuing, you agree to Flourish's Terms of Service and Privacy Policy.

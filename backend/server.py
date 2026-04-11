@@ -103,6 +103,9 @@ async def lifespan(app: FastAPI):
     # ── Startup ──
     await db.users.create_index("email", unique=True)
     await db.login_attempts.create_index("identifier")
+    await db.favourites.create_index([("user_id", 1), ("food_name", 1)])
+    await db.shopping_list.create_index("user_id")
+    await db.cycle_logs.create_index([("user_id", 1), ("period_start", -1)])
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@flourish.app")
     admin_password = os.environ.get("ADMIN_PASSWORD")
@@ -252,6 +255,10 @@ class ProfileUpdateRequest(BaseModel):
     managing_duration: Optional[str] = ""
     food_challenge: Optional[str] = ""
     onboarding_completed: Optional[bool] = True
+    severity: Optional[str] = ""          # mild / moderate / severe
+    current_symptoms: Optional[List[str]] = None
+    medications: Optional[str] = ""
+    cycle_tracking: Optional[bool] = False
 
 class FoodRatingRequest(BaseModel):
     food_name: str
@@ -284,6 +291,28 @@ class SymptomRequest(BaseModel):
     brain_fog: int = Field(ge=1, le=5)
     mood: int = Field(ge=1, le=5)
     skin: int = Field(ge=1, le=5)
+    pain: Optional[int] = Field(default=None, ge=1, le=5)
+    sleep: Optional[int] = Field(default=None, ge=1, le=5)
+    digestive: Optional[int] = Field(default=None, ge=1, le=5)
+
+class FavouriteRequest(BaseModel):
+    food_name: str
+    rating_data: Optional[dict] = None
+
+class ShoppingItemRequest(BaseModel):
+    name: str
+    source: Optional[str] = "manual"  # manual | scan | favourites | swaps
+
+class CycleLogRequest(BaseModel):
+    period_start: str   # ISO date string
+    period_length: Optional[int] = 28
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
 
 class MealPlanRequest(BaseModel):
     regenerate: Optional[bool] = False
@@ -436,8 +465,13 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
         "goals": data.goals,
         "managing_duration": data.managing_duration,
         "food_challenge": data.food_challenge,
-        "onboarding_completed": data.onboarding_completed
+        "onboarding_completed": data.onboarding_completed,
+        "severity": data.severity or "",
+        "medications": data.medications or "",
+        "cycle_tracking": data.cycle_tracking or False,
     }
+    if data.current_symptoms is not None:
+        update["current_symptoms"] = data.current_symptoms
     await db.users.update_one({"_id": ObjectId(current_user["id"] if "id" in current_user else current_user["_id"])}, {"$set": update})
     return {"success": True}
 
@@ -511,10 +545,17 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     managing_duration = current_user.get("managing_duration", "")
     food_challenge = current_user.get("food_challenge", "")
 
+    severity = current_user.get("severity", "")
+    medications = current_user.get("medications", "")
+    current_symptoms = current_user.get("current_symptoms", [])
+
     system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness. You provide evidence-based food ratings personalised to the user's specific health conditions. You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
 
-    user_prompt = f"""Rate this food for a user with the following profile:
-- Health conditions: {', '.join(conditions) if conditions else 'General health'}
+    user_prompt = f"""Rate this food for a user with the following health profile:
+- Conditions: {', '.join(conditions) if conditions else 'General health'}
+- Severity: {severity if severity else 'not specified'}
+- Current symptoms: {', '.join(current_symptoms) if current_symptoms else 'not specified'}
+- Medications/supplements: {medications if medications else 'none'}
 - Health goals: {', '.join(goals) if goals else 'General wellness'}
 - Managing duration: {managing_duration}
 - Food challenges: {food_challenge}
@@ -527,19 +568,19 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
 {{
   "name": "{data.food_name}",
   "overallScore": <integer 0-100>,
-  "verdict": "<one sentence using phrases like 'may support', 'research suggests', 'commonly associated with'  — never absolute claims>",
+  "verdict": "<one sentence using phrases like 'may support', 'research suggests', 'commonly associated with' — never absolute claims>",
   "dimensions": {{
-    "naturalness": {{"score": <0-100>, "summary": "<2-3 sentences>"}},
-    "hormonalImpact": {{"score": <0-100>, "summary": "<2-3 sentences>"}},
-    "inflammation": {{"score": <0-100>, "summary": "<2-3 sentences>"}},
-    "gutHealth": {{"score": <0-100>, "summary": "<2-3 sentences>"}}
+    "naturalness": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}},
+    "hormonalImpact": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}},
+    "inflammation": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}},
+    "gutHealth": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}}
   }},
   "flags": {{
     "warnings": ["<short warning>", ...],
     "positives": ["<short positive>", ...],
     "tips": ["<short tip>", ...]
   }},
-  "forYourCondition": "<2-3 sentences deeply personalised to their specific conditions and goals using calm measured language>",
+  "forYourCondition": "<2-3 sentences deeply personalised to their specific conditions, severity, and current symptoms using calm measured language>",
   "alternatives": [
     {{"name": "<food name>", "predictedScore": <0-100>}},
     {{"name": "<food name>", "predictedScore": <0-100>}},
@@ -753,16 +794,24 @@ async def log_symptoms(data: SymptomRequest, current_user: dict = Depends(get_cu
     uid = current_user.get("id") or current_user.get("_id")
     today = datetime.now(timezone.utc).date().isoformat()
 
+    fields: dict = {
+        "energy": data.energy,
+        "bloating": data.bloating,
+        "brain_fog": data.brain_fog,
+        "mood": data.mood,
+        "skin": data.skin,
+        "logged_at": datetime.now(timezone.utc).isoformat()
+    }
+    if data.pain is not None:
+        fields["pain"] = data.pain
+    if data.sleep is not None:
+        fields["sleep"] = data.sleep
+    if data.digestive is not None:
+        fields["digestive"] = data.digestive
+
     await db.symptoms.update_one(
         {"user_id": uid, "date": today},
-        {"$set": {
-            "energy": data.energy,
-            "bloating": data.bloating,
-            "brain_fog": data.brain_fog,
-            "mood": data.mood,
-            "skin": data.skin,
-            "logged_at": datetime.now(timezone.utc).isoformat()
-        }},
+        {"$set": fields},
         upsert=True
     )
     return {"success": True}
@@ -1268,6 +1317,288 @@ async def lookup_barcode(barcode: str):
     except Exception as e:
         logger.error(f"Barcode lookup error: {e}")
         return {"found": False, "message": "Could not fetch product data. Try searching by name."}
+
+# ── FAVOURITES ────────────────────────────────────────────────────────────────
+@api_router.get("/favourites")
+async def get_favourites(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    items = await db.favourites.find({"user_id": uid}).sort("saved_at", -1).to_list(200)
+    return {"favourites": [doc_to_dict(i) for i in items]}
+
+@api_router.post("/favourites")
+async def toggle_favourite(data: FavouriteRequest, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    existing = await db.favourites.find_one({"user_id": uid, "food_name": data.food_name})
+    if existing:
+        await db.favourites.delete_one({"_id": existing["_id"]})
+        return {"saved": False}
+    doc = {
+        "user_id": uid,
+        "food_name": data.food_name,
+        "rating_data": data.rating_data or {},
+        "saved_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.favourites.insert_one(doc)
+    return {"saved": True}
+
+@api_router.get("/favourites/check/{food_name}")
+async def check_favourite(food_name: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    existing = await db.favourites.find_one({"user_id": uid, "food_name": food_name})
+    return {"saved": bool(existing)}
+
+# ── SCAN HISTORY ──────────────────────────────────────────────────────────────
+@api_router.get("/scan-history")
+async def get_scan_history(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    # Recent rated foods from diary (all-time, most recent first, up to 200)
+    entries = await db.diary.find(
+        {"user_id": uid},
+        {"food_name": 1, "overall_score": 1, "date": 1, "logged_at": 1, "barcode": 1, "product_image": 1, "dimensions": 1}
+    ).sort("logged_at", -1).to_list(200)
+    return {"history": [doc_to_dict(e) for e in entries]}
+
+# ── SHOPPING LIST ─────────────────────────────────────────────────────────────
+@api_router.get("/shopping-list")
+async def get_shopping_list(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    doc = await db.shopping_list.find_one({"user_id": uid})
+    items = doc.get("items", []) if doc else []
+    return {"items": items}
+
+@api_router.post("/shopping-list/add")
+async def add_shopping_item(data: ShoppingItemRequest, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    item = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "source": data.source,
+        "checked": False,
+        "added_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.shopping_list.update_one(
+        {"user_id": uid},
+        {"$push": {"items": item}},
+        upsert=True
+    )
+    return {"item": item}
+
+@api_router.put("/shopping-list/{item_id}/toggle")
+async def toggle_shopping_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    doc = await db.shopping_list.find_one({"user_id": uid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Shopping list not found")
+    items = doc.get("items", [])
+    for item in items:
+        if item.get("id") == item_id:
+            item["checked"] = not item.get("checked", False)
+            break
+    await db.shopping_list.update_one({"user_id": uid}, {"$set": {"items": items}})
+    return {"success": True}
+
+@api_router.delete("/shopping-list/{item_id}")
+async def remove_shopping_item(item_id: str, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    await db.shopping_list.update_one(
+        {"user_id": uid},
+        {"$pull": {"items": {"id": item_id}}}
+    )
+    return {"success": True}
+
+@api_router.delete("/shopping-list")
+async def clear_checked_items(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    doc = await db.shopping_list.find_one({"user_id": uid})
+    if doc:
+        items = [i for i in doc.get("items", []) if not i.get("checked", False)]
+        await db.shopping_list.update_one({"user_id": uid}, {"$set": {"items": items}})
+    return {"success": True}
+
+# ── CYCLE TRACKING ────────────────────────────────────────────────────────────
+@api_router.post("/cycle/log")
+async def log_cycle(data: CycleLogRequest, current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    doc = {
+        "user_id": uid,
+        "period_start": data.period_start,
+        "period_length": data.period_length or 28,
+        "logged_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.cycle_logs.insert_one(doc)
+    return {"success": True}
+
+@api_router.get("/cycle/current")
+async def get_cycle_info(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    latest = await db.cycle_logs.find_one({"user_id": uid}, sort=[("period_start", -1)])
+    if not latest:
+        return {"phase": None, "day": None, "next_period": None}
+    from datetime import date
+    try:
+        period_start = date.fromisoformat(latest["period_start"])
+        cycle_length = latest.get("period_length", 28)
+        today = date.today()
+        day_of_cycle = (today - period_start).days % cycle_length + 1
+        if day_of_cycle <= 5:
+            phase = "menstrual"
+        elif day_of_cycle <= 13:
+            phase = "follicular"
+        elif day_of_cycle <= 16:
+            phase = "ovulation"
+        else:
+            phase = "luteal"
+        days_until_next = cycle_length - ((today - period_start).days % cycle_length)
+        next_period = (today + timedelta(days=days_until_next)).isoformat()
+        return {"phase": phase, "day": day_of_cycle, "next_period": next_period, "cycle_length": cycle_length}
+    except Exception:
+        return {"phase": None, "day": None, "next_period": None}
+
+# ── BADGES / ACHIEVEMENTS ─────────────────────────────────────────────────────
+BADGE_DEFINITIONS = [
+    {"id": "first_scan",     "name": "First Scan",        "emoji": "🌱", "desc": "Rated your first food"},
+    {"id": "streak_3",       "name": "3-Day Streak",      "emoji": "🔥", "desc": "3 days in a row"},
+    {"id": "streak_7",       "name": "Week Warrior",      "emoji": "⚡", "desc": "7-day streak"},
+    {"id": "streak_14",      "name": "Fortnight Focus",   "emoji": "🌟", "desc": "14-day streak"},
+    {"id": "streak_30",      "name": "30-Day Champion",   "emoji": "🏆", "desc": "30-day streak"},
+    {"id": "diary_10",       "name": "Food Journal",      "emoji": "📓", "desc": "10 diary entries"},
+    {"id": "diary_50",       "name": "Data Detective",    "emoji": "🔎", "desc": "50 diary entries"},
+    {"id": "symptom_7",      "name": "Body Listener",     "emoji": "💜", "desc": "7 symptom check-ins"},
+    {"id": "premium",        "name": "Flourish Premium",  "emoji": "👑", "desc": "Premium member"},
+]
+
+@api_router.get("/badges")
+async def get_badges(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    streak = current_user.get("streak", 0)
+    longest = current_user.get("longest_streak", 0)
+    total_diary = await db.diary.count_documents({"user_id": uid})
+    total_symptoms = await db.symptoms.count_documents({"user_id": uid})
+    is_premium = current_user.get("is_premium", False)
+
+    earned = set()
+    if total_diary >= 1:
+        earned.add("first_scan")
+    if longest >= 3:
+        earned.add("streak_3")
+    if longest >= 7:
+        earned.add("streak_7")
+    if longest >= 14:
+        earned.add("streak_14")
+    if longest >= 30:
+        earned.add("streak_30")
+    if total_diary >= 10:
+        earned.add("diary_10")
+    if total_diary >= 50:
+        earned.add("diary_50")
+    if total_symptoms >= 7:
+        earned.add("symptom_7")
+    if is_premium:
+        earned.add("premium")
+
+    badges = [
+        {**b, "earned": b["id"] in earned}
+        for b in BADGE_DEFINITIONS
+    ]
+    return {
+        "badges": badges,
+        "earned_count": len(earned),
+        "total_count": len(BADGE_DEFINITIONS),
+        "streak": streak,
+        "longest_streak": longest,
+        "total_diary": total_diary,
+        "total_symptoms": total_symptoms
+    }
+
+# ── WEEKLY REPORT ─────────────────────────────────────────────────────────────
+@api_router.get("/insights/weekly-report")
+async def get_weekly_report(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+
+    diary_entries = await db.diary.find(
+        {"user_id": uid, "date": {"$gte": seven_days_ago}},
+        {"food_name": 1, "overall_score": 1, "date": 1}
+    ).to_list(200)
+    symptom_entries = await db.symptoms.find(
+        {"user_id": uid, "date": {"$gte": seven_days_ago}},
+    ).to_list(14)
+
+    total_ratings = len(diary_entries)
+    avg_score = round(sum(e.get("overall_score", 0) for e in diary_entries) / total_ratings) if diary_entries else 0
+    green_foods = [e["food_name"] for e in diary_entries if e.get("overall_score", 0) >= 70]
+    red_foods = [e["food_name"] for e in diary_entries if e.get("overall_score", 0) < 40]
+
+    avg_energy = round(sum(s.get("energy", 3) for s in symptom_entries) / len(symptom_entries), 1) if symptom_entries else None
+    avg_bloating = round(sum(s.get("bloating", 3) for s in symptom_entries) / len(symptom_entries), 1) if symptom_entries else None
+
+    return {
+        "week_start": seven_days_ago,
+        "total_ratings": total_ratings,
+        "avg_score": avg_score,
+        "days_logged": len(set(e.get("date") for e in diary_entries)),
+        "green_foods": list(set(green_foods))[:5],
+        "red_foods": list(set(red_foods))[:3],
+        "symptom_check_ins": len(symptom_entries),
+        "avg_energy": avg_energy,
+        "avg_bloating": avg_bloating,
+    }
+
+# ── DELETE ACCOUNT ────────────────────────────────────────────────────────────
+@api_router.delete("/auth/account")
+async def delete_account(current_user: dict = Depends(get_current_user)):
+    from fastapi.responses import JSONResponse as JR
+    uid = current_user.get("id") or current_user.get("_id")
+    # Delete all user data
+    await db.diary.delete_many({"user_id": uid})
+    await db.symptoms.delete_many({"user_id": uid})
+    await db.daily_tips.delete_many({"user_id": uid})
+    await db.favourites.delete_many({"user_id": uid})
+    await db.shopping_list.delete_many({"user_id": uid})
+    await db.cycle_logs.delete_many({"user_id": uid})
+    await db.users.delete_one({"_id": ObjectId(uid)})
+    resp = JR(content={"success": True})
+    resp.delete_cookie("access_token")
+    return resp
+
+# ── PASSWORD RESET ─────────────────────────────────────────────────────────────
+@api_router.post("/auth/forgot-password")
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, data: PasswordResetRequest):
+    email = data.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    # Always return success to prevent email enumeration
+    if user:
+        token = str(uuid.uuid4())
+        expires = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
+        )
+        logger.info(f"Password reset requested for {email}, token: {token}")
+        # In production this would send an email — for now log it
+    return {"success": True, "message": "If an account exists with this email, a reset link has been sent."}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(data: PasswordResetConfirmRequest):
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user = await db.users.find_one({"password_reset_token": data.token})
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    expires_str = user.get("password_reset_expires", "")
+    try:
+        expires = datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) > expires:
+            raise HTTPException(status_code=400, detail="Reset token has expired")
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+    await db.users.update_one(
+        {"_id": user["_id"]},
+        {"$set": {"password_hash": hash_password(data.new_password)},
+         "$unset": {"password_reset_token": "", "password_reset_expires": ""}}
+    )
+    return {"success": True, "message": "Password updated successfully"}
 
 # ── Health check ───────────────────────────────────────────────────────────────
 @api_router.get("/")

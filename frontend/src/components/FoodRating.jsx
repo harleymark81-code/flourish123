@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Share2, BookmarkPlus, Check, Lock, ChevronRight, Bell, X } from "lucide-react";
+import { ArrowLeft, Share2, BookmarkPlus, Check, Lock, ChevronRight, Bell, X, Heart, ChevronDown } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
@@ -143,8 +143,22 @@ function ScoreCircle({ score, size = 92 }) {
   );
 }
 
-function DimensionCard({ label, score, summary, locked, pixelated, onUnlock }) {
-  const color = getScoreColor(score);
+// Handles both 1-10 (new API) and 0-100 (legacy) dimension scores
+function getDimScoreColor(score) {
+  // If score > 10, treat as 0-100 legacy
+  if (score > 10) return getScoreColor(score);
+  // 1-10: green 7-10, amber 4-6, red 1-3
+  if (score >= 7) return "#639922";
+  if (score >= 4) return "#BA7517";
+  return "#A32D2D";
+}
+
+function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock }) {
+  const [showWhy, setShowWhy] = useState(false);
+  const isNewScale = score !== undefined && score <= 10;
+  const color = getDimScoreColor(score);
+  const barPct = isNewScale ? (score / 10) * 100 : score;
+
   return (
     <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 14, border: "1px solid var(--border)", position: "relative", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -155,13 +169,15 @@ function DimensionCard({ label, score, summary, locked, pixelated, onUnlock }) {
             <Lock size={13} color="#534AB7" />
           </div>
         ) : (
-          <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: "-0.02em" }}>{score}</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: "-0.02em" }}>
+            {score}{isNewScale ? "/10" : ""}
+          </span>
         )}
       </div>
       <div style={{ height: 5, background: "var(--border)", borderRadius: 3, marginBottom: 8, overflow: "hidden" }}>
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: locked || pixelated ? "0%" : `${score}%` }}
+          animate={{ width: locked || pixelated ? "0%" : `${barPct}%` }}
           transition={{ type: "spring", stiffness: 180, damping: 22 }}
           style={{ height: "100%", background: color, borderRadius: 3 }}
         />
@@ -176,7 +192,31 @@ function DimensionCard({ label, score, summary, locked, pixelated, onUnlock }) {
           </button>
         </div>
       ) : (
-        <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 }}>{summary}</p>
+        <div>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 }}>{summary}</p>
+          {why && (
+            <div>
+              <button
+                onClick={() => setShowWhy(v => !v)}
+                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#534AB7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", marginTop: 2 }}>
+                Why this score?
+                <ChevronDown size={11} style={{ transform: showWhy ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+              </button>
+              <AnimatePresence>
+                {showWhy && (
+                  <motion.p
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ fontSize: 11, color: color, margin: "4px 0 0", fontWeight: 600, lineHeight: 1.4, overflow: "hidden" }}>
+                    {why}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -187,7 +227,33 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
   const [logged, setLogged] = useState(false);
   const [particles, setParticles] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
+  const [isFavourite, setIsFavourite] = useState(false);
+  const [savingFav, setSavingFav] = useState(false);
   const isPremium = user?.is_premium;
+
+  const foodName = rating.food_name || rating.name;
+
+  useEffect(() => {
+    // Check if already favourited
+    axios.get(`${API}/favourites/check/${encodeURIComponent(foodName)}`, { headers: getHeaders(), withCredentials: true })
+      .then(res => setIsFavourite(res.data.saved))
+      .catch(() => {});
+  }, [foodName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleToggleFavourite = async () => {
+    setSavingFav(true);
+    try {
+      const res = await axios.post(`${API}/favourites`, {
+        food_name: foodName,
+        rating_data: { overallScore: rating.overallScore, dimensions: rating.dimensions }
+      }, { headers: getHeaders(), withCredentials: true });
+      setIsFavourite(res.data.saved);
+    } catch (e) {
+      console.error("[Flourish] toggleFavourite error:", e);
+    } finally {
+      setSavingFav(false);
+    }
+  };
 
   // Show notification prompt after first food rating completes (not on app open)
   useEffect(() => {
@@ -233,7 +299,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
   };
 
   const handleShare = async () => {
-    const text = `I just rated ${rating.food_name || rating.name} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://theflourishapp.netlify.app`;
+    const text = `I just rated ${foodName} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://theflourishapp.netlify.app`;
     if (navigator.share) {
       await navigator.share({ title: "Flourish Food Rating", text }).catch(() => {});
     } else {
@@ -256,10 +322,16 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
           <ArrowLeft size={20} color="#534AB7" />
         </motion.button>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Food Rating</h2>
-        <motion.button whileTap={{ scale: 0.88 }} onClick={handleShare}
-          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-          <Share2 size={18} color="#534AB7" />
-        </motion.button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <motion.button whileTap={{ scale: 0.88 }} onClick={handleToggleFavourite} disabled={savingFav}
+            style={{ background: isFavourite ? "rgba(163,45,45,0.1)" : "var(--bg-card)", border: `1px solid ${isFavourite ? "rgba(163,45,45,0.3)" : "var(--border)"}`, borderRadius: 10, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Heart size={18} color={isFavourite ? "#A32D2D" : "#534AB7"} fill={isFavourite ? "#A32D2D" : "none"} />
+          </motion.button>
+          <motion.button whileTap={{ scale: 0.88 }} onClick={handleShare}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <Share2 size={18} color="#534AB7" />
+          </motion.button>
+        </div>
       </div>
 
       <div style={{ padding: "20px 20px 0" }}>
@@ -277,7 +349,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
           <ScoreCircle score={rating.overallScore} size={92} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 8px", letterSpacing: "-0.02em", lineHeight: 1.2 }}>
-              {rating.food_name || rating.name}
+              {foodName}
             </h1>
             <span style={{ background: verdict.bg, color: verdict.color, fontWeight: 700, padding: "5px 14px", borderRadius: 20, fontSize: 13 }}>
               {verdict.label}
@@ -317,12 +389,12 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
         <p style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.02em" }}>Health dimensions</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
           {/* Free: naturalness + hormonal in full */}
-          <DimensionCard label="Naturalness" score={rating.dimensions?.naturalness?.score} summary={rating.dimensions?.naturalness?.summary} locked={false} />
-          <DimensionCard label="Hormonal" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} locked={false} />
+          <DimensionCard label="Naturalness" score={rating.dimensions?.naturalness?.score} summary={rating.dimensions?.naturalness?.summary} why={rating.dimensions?.naturalness?.why} locked={false} />
+          <DimensionCard label="Hormonal" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} why={rating.dimensions?.hormonalImpact?.why} locked={false} />
           {/* Free: inflammation + gut = pixelated */}
-          <DimensionCard label="Inflammation" score={rating.dimensions?.inflammation?.score} summary={rating.dimensions?.inflammation?.summary}
+          <DimensionCard label="Inflammation" score={rating.dimensions?.inflammation?.score} summary={rating.dimensions?.inflammation?.summary} why={rating.dimensions?.inflammation?.why}
             locked={false} pixelated={!isPremium} onUnlock={() => onOpenPaywall("inflammation")} />
-          <DimensionCard label="Gut Health" score={rating.dimensions?.gutHealth?.score} summary={rating.dimensions?.gutHealth?.summary}
+          <DimensionCard label="Gut Health" score={rating.dimensions?.gutHealth?.score} summary={rating.dimensions?.gutHealth?.summary} why={rating.dimensions?.gutHealth?.why}
             locked={false} pixelated={!isPremium} onUnlock={() => onOpenPaywall("gut_health")} />
         </div>
 

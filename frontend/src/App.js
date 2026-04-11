@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Home, BookOpen, User, Moon, Sun } from "lucide-react";
+import { Scan, BookOpen, BarChart2, ShoppingBag, User, Moon, Sun } from "lucide-react";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import SplashScreen from "./components/SplashScreen";
@@ -10,11 +10,12 @@ import Onboarding from "./components/Onboarding";
 import HomeScreen from "./components/HomeScreen";
 import FoodDiary from "./components/FoodDiary";
 import ProfileScreen from "./components/ProfileScreen";
-import SymptomTracker from "./components/SymptomTracker";
 import Paywall from "./components/Paywall";
 import AdminDashboard from "./pages/AdminDashboard";
 import AffiliateApplication from "./pages/AffiliateApplication";
 import AffiliateDashboard from "./pages/AffiliateDashboard";
+import InsightsScreen from "./components/InsightsScreen";
+import MyFoodsScreen from "./components/MyFoodsScreen";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -103,7 +104,7 @@ function AppContent() {
   const { user, loading, refreshUser } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [showSplash, setShowSplash] = useState(!sessionStorage.getItem("splash_shown"));
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState("scan");
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallEntry, setPaywallEntry] = useState("default");
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
@@ -187,10 +188,6 @@ function AppContent() {
   if (!user.onboarding_completed) return <Onboarding onComplete={() => refreshUser()} />;
   if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
 
-  const handleDiaryTab = () => {
-    setActiveTab("diary");
-  };
-
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", position: "relative" }}>
 
@@ -225,14 +222,24 @@ function AppContent() {
 
       {/* Content */}
       <AnimatePresence mode="wait">
-        {activeTab === "home" && (
-          <motion.div key="home" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+        {activeTab === "scan" && (
+          <motion.div key="scan" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
             <HomeScreen onNavigate={(tab) => setActiveTab(tab)} onOpenPaywall={openPaywall} />
           </motion.div>
         )}
         {activeTab === "diary" && (
           <motion.div key="diary" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
             <FoodDiary onOpenPaywall={openPaywall} />
+          </motion.div>
+        )}
+        {activeTab === "insights" && (
+          <motion.div key="insights" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+            <InsightsScreen onOpenPaywall={openPaywall} />
+          </motion.div>
+        )}
+        {activeTab === "myfoods" && (
+          <motion.div key="myfoods" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
+            <MyFoodsScreen onOpenPaywall={openPaywall} onRateFood={(name) => { setActiveTab("scan"); }} />
           </motion.div>
         )}
         {activeTab === "profile" && (
@@ -242,31 +249,33 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      {/* Bottom Nav */}
-      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "var(--nav-bg)", backdropFilter: "blur(20px)", borderTop: "1px solid var(--border)", padding: "10px 16px", paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 9000 }}>
+      {/* Bottom Nav — 5 tabs */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "var(--nav-bg)", backdropFilter: "blur(20px)", borderTop: "1px solid var(--border)", padding: "8px 4px", paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))", display: "flex", justifyContent: "space-around", alignItems: "center", zIndex: 9000 }}>
         {[
-          { id: "home", icon: <Home size={22} />, label: "Home" },
-          { id: "diary", icon: <BookOpen size={22} />, label: "Diary" },
-          { id: "profile", icon: <User size={22} />, label: "Profile" },
+          { id: "scan",     icon: <Scan size={21} />,        label: "Scan"     },
+          { id: "diary",    icon: <BookOpen size={21} />,    label: "Diary"    },
+          { id: "insights", icon: <BarChart2 size={21} />,   label: "Insights" },
+          { id: "myfoods",  icon: <ShoppingBag size={21} />, label: "My Foods" },
+          { id: "profile",  icon: <User size={21} />,        label: "Profile"  },
         ].map(tab => (
           <motion.button key={tab.id} data-testid={`nav-${tab.id}`} whileTap={{ scale: 0.88 }}
-            onClick={() => tab.id === "diary" ? handleDiaryTab() : setActiveTab(tab.id)}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "6px 16px", position: "relative", zIndex: 9001, minHeight: 44 }}>
+            onClick={() => setActiveTab(tab.id)}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", position: "relative", zIndex: 9001, minHeight: 44, flex: 1 }}>
             <div style={{ color: activeTab === tab.id ? "#534AB7" : "var(--text-muted)" }}>{tab.icon}</div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: activeTab === tab.id ? "#534AB7" : "var(--text-muted)" }}>{tab.label}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: activeTab === tab.id ? "#534AB7" : "var(--text-muted)" }}>{tab.label}</span>
             {activeTab === tab.id && <motion.div layoutId="tab-dot" style={{ width: 4, height: 4, borderRadius: "50%", background: "#534AB7" }} />}
           </motion.button>
         ))}
-        {/* Dark mode toggle */}
+        {/* Dark mode toggle — compact */}
         <motion.button
           data-testid="theme-toggle-btn"
           whileTap={{ scale: 0.88 }}
           onClick={toggleTheme}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", padding: "6px 16px", zIndex: 9001, minHeight: 44 }}>
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", zIndex: 9001, minHeight: 44, flex: 1 }}>
           <div style={{ color: "var(--text-muted)" }}>
-            {isDark ? <Sun size={22} /> : <Moon size={22} />}
+            {isDark ? <Sun size={21} /> : <Moon size={21} />}
           </div>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)" }}>{isDark ? "Light" : "Dark"}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)" }}>{isDark ? "Light" : "Dark"}</span>
         </motion.button>
       </div>
 
