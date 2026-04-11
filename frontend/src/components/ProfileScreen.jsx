@@ -54,13 +54,13 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   });
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", paddingBottom: 80, paddingTop: 56 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 80, paddingTop: 56 }}>
       <div style={{ padding: "0 20px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Profile</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Profile</h1>
           <motion.button data-testid="logout-btn" whileTap={{ scale: 0.9 }} onClick={logout}
-            style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <LogOut size={16} color="#6B6A7C" />
           </motion.button>
         </div>
@@ -102,12 +102,12 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
               { label: "Monthly avg", value: stats.monthly_avg, icon: null }
             ].map((stat, i) => (
               <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }}
-                style={{ background: "#F8F7FF", borderRadius: 12, padding: "14px 10px", border: "1px solid #E8E6FF", textAlign: "center" }}>
+                style={{ background: "var(--bg-card)", borderRadius: 12, padding: "14px 10px", border: "1px solid var(--border)", textAlign: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 4 }}>
                   {stat.icon}
                   <span style={{ fontSize: 22, fontWeight: 700, color: "#534AB7" }}>{stat.value}</span>
                 </div>
-                <p style={{ fontSize: 10, color: "#6B6A7C", margin: 0, lineHeight: 1.2 }}>{stat.label}</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0, lineHeight: 1.2 }}>{stat.label}</p>
               </motion.div>
             ))}
           </div>
@@ -115,8 +115,8 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
         {/* Conditions */}
         {conditionLabels.length > 0 && (
-          <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid #E8E6FF" }}>
-            <p style={{ fontSize: 13, fontWeight: 700, color: "#6B6A7C", textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 12px" }}>Your conditions</p>
+          <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 12px" }}>Your conditions</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {conditionLabels.map(c => (
                 <span key={c} style={{ background: "rgba(83,74,183,0.1)", color: "#534AB7", padding: "5px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600 }}>{c}</span>
@@ -145,12 +145,12 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
         {/* Referral — Premium only */}
         {isPremium && referralStats && (
-          <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid #E8E6FF" }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#1A1A24", margin: "0 0 12px" }}>Refer friends & earn</p>
-            <p style={{ fontSize: 13, color: "#6B6A7C", margin: "0 0 12px" }}>Earn one free month of Premium for every paying referral.</p>
+          <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)" }}>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 12px" }}>Refer friends & earn</p>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px" }}>Earn one free month of Premium for every paying referral.</p>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <div style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "10px 12px", border: "1px solid #E8E6FF" }}>
-                <p style={{ fontSize: 12, color: "#6B6A7C", margin: "0 0 2px" }}>Referral link</p>
+              <div style={{ flex: 1, background: "var(--bg-elevated)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border)" }}>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Referral link</p>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "#534AB7", margin: 0, wordBreak: "break-all" }}>{referralStats.referral_link}</p>
               </div>
               <motion.button whileTap={{ scale: 0.9 }} onClick={handleCopyReferral}
@@ -159,13 +159,13 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
               </motion.button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-              <div style={{ background: "#fff", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid #E8E6FF" }}>
+              <div style={{ background: "var(--bg-elevated)", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "#534AB7", margin: 0 }}>{referralStats.paying_referrals}</p>
-                <p style={{ fontSize: 11, color: "#6B6A7C", margin: 0 }}>Paying referrals</p>
+                <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Paying referrals</p>
               </div>
-              <div style={{ background: "#fff", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid #E8E6FF" }}>
+              <div style={{ background: "var(--bg-elevated)", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: 20, fontWeight: 700, color: "#639922", margin: 0 }}>{referralStats.free_months_earned}</p>
-                <p style={{ fontSize: 11, color: "#6B6A7C", margin: 0 }}>Free months earned</p>
+                <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Free months earned</p>
               </div>
             </div>
             <motion.button whileTap={{ scale: 0.97 }} onClick={handleShareReferral}
@@ -178,10 +178,10 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
         {/* Affiliate Link */}
         <motion.div whileTap={{ scale: 0.97 }} onClick={() => window.location.href = "/affiliate"}
-          style={{ background: "#F8F7FF", borderRadius: 16, padding: 16, border: "1px solid #E8E6FF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <div>
-            <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A24", margin: "0 0 2px" }}>Become an affiliate</p>
-            <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>Earn 30% commission on referrals</p>
+            <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Become an affiliate</p>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Earn 30% commission on referrals</p>
           </div>
           <ChevronRight size={16} color="#534AB7" />
         </motion.div>

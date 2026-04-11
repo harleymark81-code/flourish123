@@ -93,9 +93,9 @@ export default function Onboarding({ onComplete }) {
   };
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", display: "flex", flexDirection: "column" }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column" }}>
       {/* Progress Bar */}
-      <div style={{ height: 4, background: "#E8E6FF", position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 100 }}>
+      <div style={{ height: 4, background: "var(--border)", position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, zIndex: 100 }}>
         <motion.div
           style={{ height: "100%", background: "#534AB7", borderRadius: 4 }}
           animate={{ width: `${progress}%` }}
@@ -116,7 +116,7 @@ export default function Onboarding({ onComplete }) {
                 <span style={{ fontSize: 36 }}>🌸</span>
               </motion.div>
 
-              <h1 style={{ fontSize: 36, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Flourish</h1>
+              <h1 style={{ fontSize: 36, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Flourish</h1>
               <p style={{ fontSize: 20, fontWeight: 600, color: "#534AB7", marginBottom: 32 }}>Finally. Food that works for your body.</p>
 
               <div style={{ height: 32, overflow: "hidden", marginBottom: 48 }}>
@@ -127,7 +127,7 @@ export default function Onboarding({ onComplete }) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.3 }}
-                    style={{ fontSize: 16, color: "#6B6A7C", fontWeight: 500 }}>
+                    style={{ fontSize: 16, color: "var(--text-secondary)", fontWeight: 500 }}>
                     {TAGLINES[taglineIdx]}
                   </motion.p>
                 </AnimatePresence>
@@ -145,8 +145,8 @@ export default function Onboarding({ onComplete }) {
 
           {screen === 2 && (
             <motion.div key="s2" variants={containerVariants} initial="initial" animate="animate" exit="exit">
-              <h2 style={{ fontSize: 26, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>What does your body deal with every day?</h2>
-              <p style={{ color: "#6B6A7C", marginBottom: 28 }}>Select all that apply</p>
+              <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>What does your body deal with every day?</h2>
+              <p style={{ color: "var(--text-secondary)", marginBottom: 28 }}>Select all that apply</p>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 32 }}>
                 {CONDITIONS.map((c, i) => (
@@ -160,8 +160,8 @@ export default function Onboarding({ onComplete }) {
                     style={{
                       padding: "16px 12px",
                       borderRadius: 16,
-                      border: `2px solid ${selectedConditions.includes(c.id) ? "#534AB7" : "#E8E6FF"}`,
-                      background: selectedConditions.includes(c.id) ? "#534AB7" : "#F8F7FF",
+                      border: `2px solid ${selectedConditions.includes(c.id) ? "#534AB7" : "var(--border)"}`,
+                      background: selectedConditions.includes(c.id) ? "#534AB7" : "var(--bg-card)",
                       cursor: "pointer",
                       textAlign: "center",
                       transition: "all 0.3s"
@@ -182,8 +182,8 @@ export default function Onboarding({ onComplete }) {
                 onClick={() => setScreen(3)}
                 disabled={selectedConditions.length === 0}
                 style={{
-                  width: "100%", background: selectedConditions.length > 0 ? "#534AB7" : "#E8E6FF",
-                  color: selectedConditions.length > 0 ? "#fff" : "#A09FAD",
+                  width: "100%", background: selectedConditions.length > 0 ? "#534AB7" : "var(--border)",
+                  color: selectedConditions.length > 0 ? "#fff" : "var(--text-muted)",
                   border: "none", borderRadius: 12, padding: "18px 24px",
                   fontSize: 16, fontWeight: 600, cursor: selectedConditions.length > 0 ? "pointer" : "not-allowed",
                   transition: "all 0.3s"
@@ -195,8 +195,8 @@ export default function Onboarding({ onComplete }) {
 
           {screen === 3 && (
             <motion.div key="s3" variants={containerVariants} initial="initial" animate="animate" exit="exit">
-              <h2 style={{ fontSize: 26, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>What matters most to you right now?</h2>
-              <p style={{ color: "#6B6A7C", marginBottom: 28 }}>Select all that apply</p>
+              <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>What matters most to you right now?</h2>
+              <p style={{ color: "var(--text-secondary)", marginBottom: 28 }}>Select all that apply</p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
                 {GOALS.map((g, i) => (
@@ -210,8 +210,8 @@ export default function Onboarding({ onComplete }) {
                     style={{
                       padding: "20px 20px",
                       borderRadius: 16,
-                      border: `2px solid ${selectedGoals.includes(g.id) ? "#534AB7" : "#E8E6FF"}`,
-                      background: selectedGoals.includes(g.id) ? "#534AB7" : "#F8F7FF",
+                      border: `2px solid ${selectedGoals.includes(g.id) ? "#534AB7" : "var(--border)"}`,
+                      background: selectedGoals.includes(g.id) ? "#534AB7" : "var(--bg-card)",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -232,8 +232,8 @@ export default function Onboarding({ onComplete }) {
                 onClick={() => setScreen(4)}
                 disabled={selectedGoals.length === 0}
                 style={{
-                  width: "100%", background: selectedGoals.length > 0 ? "#534AB7" : "#E8E6FF",
-                  color: selectedGoals.length > 0 ? "#fff" : "#A09FAD",
+                  width: "100%", background: selectedGoals.length > 0 ? "#534AB7" : "var(--border)",
+                  color: selectedGoals.length > 0 ? "#fff" : "var(--text-muted)",
                   border: "none", borderRadius: 12, padding: "18px 24px",
                   fontSize: 16, fontWeight: 600, cursor: selectedGoals.length > 0 ? "pointer" : "not-allowed"
                 }}>
@@ -244,9 +244,9 @@ export default function Onboarding({ onComplete }) {
 
           {screen === 4 && (
             <motion.div key="s4" variants={containerVariants} initial="initial" animate="animate" exit="exit">
-              <h2 style={{ fontSize: 26, fontWeight: 700, color: "#1A1A24", marginBottom: 28 }}>A couple quick questions</h2>
+              <h2 style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)", marginBottom: 28 }}>A couple quick questions</h2>
 
-              <p style={{ fontSize: 16, fontWeight: 600, color: "#1A1A24", marginBottom: 12 }}>How long have you been managing your condition?</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>How long have you been managing your condition?</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 28 }}>
                 {DURATIONS.map(d => (
                   <motion.div
@@ -256,8 +256,8 @@ export default function Onboarding({ onComplete }) {
                     onClick={() => setDuration(d)}
                     style={{
                       padding: "14px 16px", borderRadius: 12,
-                      border: `2px solid ${duration === d ? "#534AB7" : "#E8E6FF"}`,
-                      background: duration === d ? "#534AB7" : "#F8F7FF",
+                      border: `2px solid ${duration === d ? "#534AB7" : "var(--border)"}`,
+                      background: duration === d ? "#534AB7" : "var(--bg-card)",
                       cursor: "pointer", transition: "all 0.3s"
                     }}>
                     <p style={{ margin: 0, fontWeight: 600, color: duration === d ? "#fff" : "#1A1A24" }}>{d}</p>
@@ -265,7 +265,7 @@ export default function Onboarding({ onComplete }) {
                 ))}
               </div>
 
-              <p style={{ fontSize: 16, fontWeight: 600, color: "#1A1A24", marginBottom: 12 }}>What's your biggest food challenge?</p>
+              <p style={{ fontSize: 16, fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>What's your biggest food challenge?</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
                 {CHALLENGES.map(c => (
                   <motion.div
@@ -275,8 +275,8 @@ export default function Onboarding({ onComplete }) {
                     onClick={() => setChallenge(c)}
                     style={{
                       padding: "14px 16px", borderRadius: 12,
-                      border: `2px solid ${challenge === c ? "#534AB7" : "#E8E6FF"}`,
-                      background: challenge === c ? "#534AB7" : "#F8F7FF",
+                      border: `2px solid ${challenge === c ? "#534AB7" : "var(--border)"}`,
+                      background: challenge === c ? "#534AB7" : "var(--bg-card)",
                       cursor: "pointer", transition: "all 0.3s"
                     }}>
                     <p style={{ margin: 0, fontWeight: 600, color: challenge === c ? "#fff" : "#1A1A24" }}>{c}</p>
@@ -290,8 +290,8 @@ export default function Onboarding({ onComplete }) {
                 onClick={() => setScreen(5)}
                 disabled={!duration || !challenge}
                 style={{
-                  width: "100%", background: duration && challenge ? "#534AB7" : "#E8E6FF",
-                  color: duration && challenge ? "#fff" : "#A09FAD",
+                  width: "100%", background: duration && challenge ? "#534AB7" : "var(--border)",
+                  color: duration && challenge ? "#fff" : "var(--text-muted)",
                   border: "none", borderRadius: 12, padding: "18px 24px",
                   fontSize: 16, fontWeight: 600, cursor: duration && challenge ? "pointer" : "not-allowed"
                 }}>
@@ -312,11 +312,11 @@ export default function Onboarding({ onComplete }) {
                 <span style={{ fontSize: 40 }}>✓</span>
               </motion.div>
 
-              <h2 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Flourish is now personalised for you.</h2>
-              <p style={{ fontSize: 16, color: "#6B6A7C", marginBottom: 48 }}>Your food intelligence is ready.</p>
+              <h2 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Flourish is now personalised for you.</h2>
+              <p style={{ fontSize: 16, color: "var(--text-secondary)", marginBottom: 48 }}>Your food intelligence is ready.</p>
 
-              <div style={{ width: "100%", background: "#F8F7FF", borderRadius: 16, padding: 24, marginBottom: 32, border: "1px solid #E8E6FF" }}>
-                <p style={{ fontSize: 14, color: "#6B6A7C", margin: 0 }}>Personalised for</p>
+              <div style={{ width: "100%", background: "var(--bg-card)", borderRadius: 16, padding: 24, marginBottom: 32, border: "1px solid var(--border)" }}>
+                <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>Personalised for</p>
                 <p style={{ fontSize: 18, fontWeight: 700, color: "#534AB7", margin: "4px 0 0" }}>
                   {selectedConditions.join(", ").replace(/_/g, " ")}
                 </p>

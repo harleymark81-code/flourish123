@@ -340,7 +340,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", paddingBottom: 80 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 80 }}>
       {/* Streak Reward Banner */}
       <AnimatePresence>
         {showReward && streakReward && (
@@ -377,7 +377,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
               <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 16 }}>{getMilestoneMsg(showMilestone)}</p>
               <motion.button
                 whileTap={{ scale: 0.97 }}
-                style={{ marginTop: 24, background: "#fff", color: "#534AB7", border: "none", borderRadius: 12, padding: "12px 24px", fontWeight: 700, cursor: "pointer" }}
+                style={{ marginTop: 24, background: "var(--bg-elevated)", color: "#534AB7", border: "none", borderRadius: 12, padding: "12px 24px", fontWeight: 700, cursor: "pointer" }}
                 onClick={() => setShowMilestone(false)}>
                 Share my streak
               </motion.button>
@@ -415,11 +415,11 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ background: "linear-gradient(180deg, #F8F7FF 0%, #fff 100%)", padding: "52px 20px 20px" }}>
+      <div style={{ background: "linear-gradient(180deg, var(--bg-card) 0%, var(--bg-app) 100%)", padding: "52px 20px 20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <p style={{ fontSize: 14, color: "#6B6A7C", margin: 0 }}>{getGreeting()}</p>
-            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#1A1A24", margin: "4px 0 0" }}>
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>{getGreeting()}</p>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: "4px 0 0" }}>
               {user?.name || "there"} 🌸
             </h1>
           </div>
@@ -440,27 +440,27 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", damping: 20 }}
-            style={{ background: "#F8F7FF", borderRadius: 16, padding: 20, border: "1px solid #E8E6FF", boxShadow: "0 2px 12px rgba(83,74,183,0.08)", marginBottom: 16 }}>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#6B6A7C", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Today at a glance</p>
+            style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", boxShadow: "0 2px 12px rgba(83,74,183,0.08)", marginBottom: 16 }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Today at a glance</p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 22, fontWeight: 700, color: stats.monthly_avg >= 70 ? "#639922" : stats.monthly_avg >= 40 ? "#BA7517" : "#A32D2D", margin: 0 }}>{stats.monthly_avg}</p>
-                <p style={{ fontSize: 10, color: "#6B6A7C", margin: 0 }}>Avg Score</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Avg Score</p>
               </div>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.today_ratings}</p>
-                <p style={{ fontSize: 10, color: "#6B6A7C", margin: 0 }}>Logged</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Logged</p>
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
                   <Flame size={16} color={stats.streak >= 7 ? "#534AB7" : "#F97316"} />
-                  <p style={{ fontSize: 22, fontWeight: 700, color: "#1A1A24", margin: 0 }}>{stats.streak}</p>
+                  <p style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{stats.streak}</p>
                 </div>
-                <p style={{ fontSize: 10, color: "#6B6A7C", margin: 0 }}>Streak</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Streak</p>
               </div>
               <div style={{ textAlign: "center" }}>
                 <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.remaining_ratings}</p>
-                <p style={{ fontSize: 10, color: "#6B6A7C", margin: 0 }}>Left today</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Left today</p>
               </div>
             </div>
           </motion.div>
@@ -491,7 +491,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           transition={{ delay: 0.1, type: "spring" }}
           whileTap={{ scale: 0.97 }}
           onClick={() => setShowMealPlanner(true)}
-          style={{ width: "100%", background: "#F8F7FF", border: "2px dashed #534AB7", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20 }}>
+          style={{ width: "100%", background: "var(--bg-card)", border: "2px dashed #534AB7", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20 }}>
           <span style={{ fontSize: 20 }}>🍽️</span>
           <span style={{ fontSize: 15, fontWeight: 600, color: "#534AB7" }}>What should I eat today?</span>
           <ChevronRight size={16} color="#534AB7" />
@@ -512,9 +512,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             placeholder="Search any food..."
             style={{
-              flex: 1, background: "#F8F7FF", border: `2px solid ${inputShake ? "#A32D2D" : "#E8E6FF"}`,
+              flex: 1, background: "var(--input-bg)", border: `2px solid ${inputShake ? "#A32D2D" : "var(--border)"}`,
               borderRadius: 12, padding: "14px 16px", fontSize: 15, outline: "none",
-              color: "#1A1A24", transition: "all 0.3s"
+              color: "var(--input-text)", transition: "all 0.3s"
             }}
           />
           <motion.button
@@ -529,7 +529,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             data-testid="scan-btn"
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowScanner(true)}
-            style={{ background: "#F8F7FF", border: "2px solid #E8E6FF", borderRadius: 12, padding: "14px 12px", cursor: "pointer" }}>
+            style={{ background: "var(--bg-card)", border: "2px solid var(--border)", borderRadius: 12, padding: "14px 12px", cursor: "pointer" }}>
             <Camera size={20} color="#534AB7" />
           </motion.button>
         </motion.div>
@@ -541,7 +541,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              style={{ background: "#F8F7FF", borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "center" }}>
+              style={{ background: "var(--bg-card)", borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "center" }}>
               <div
                 className="loading-spinner"
                 style={{ width: 40, height: 40, borderRadius: "50%", border: "3px solid #534AB7", borderTopColor: "transparent", margin: "0 auto 12px" }}
@@ -567,7 +567,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15, type: "spring" }}
           style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 12 }}>Quick picks for you</p>
+          <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Quick picks for you</p>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 8, scrollbarWidth: "none" }}>
             {quickPicks.map((food, i) => (
               <motion.button
@@ -578,12 +578,12 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
                 whileTap={{ scale: 0.93 }}
                 onClick={() => rateFood(food.name)}
                 style={{
-                  flexShrink: 0, background: "#F8F7FF", border: "1px solid #E8E6FF",
+                  flexShrink: 0, background: "var(--bg-card)", border: "1px solid var(--border)",
                   borderRadius: 12, padding: "10px 14px", cursor: "pointer",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 72
                 }}>
                 <span style={{ fontSize: 22 }}>{food.emoji}</span>
-                <span style={{ fontSize: 10, color: "#6B6A7C", fontWeight: 600, textAlign: "center", lineHeight: 1.2, maxWidth: 60 }}>{food.name}</span>
+                <span style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textAlign: "center", lineHeight: 1.2, maxWidth: 60 }}>{food.name}</span>
               </motion.button>
             ))}
           </div>
@@ -597,7 +597,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           transition={{ delay: 0.17, type: "spring" }}
           whileTap={{ scale: 0.97 }}
           onClick={() => setShowSymptoms(true)}
-          style={{ width: "100%", background: "#fff", border: "2px solid #E8E6FF", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
+          style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
           <Heart size={16} color="#534AB7" />
           <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
         </motion.button>
@@ -608,16 +608,16 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, type: "spring" }}>
-            <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 12 }}>Recently rated</p>
+            <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Recently rated</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {recentRatings.map((entry, i) => (
                 <motion.div
                   key={entry.id || i}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0, transition: { delay: i * 0.06 } }}
-                  style={{ background: "#F8F7FF", borderRadius: 12, padding: "12px 16px", border: "1px solid #E8E6FF", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 16px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "#fff", border: "1px solid #E8E6FF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--bg-elevated)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                       {entry.product_image ? (
                         <img src={entry.product_image} alt={entry.food_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       ) : (
@@ -625,8 +625,8 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
                       )}
                     </div>
                     <div>
-                      <p style={{ fontSize: 14, fontWeight: 600, color: "#1A1A24", margin: 0 }}>{entry.food_name || entry.name}</p>
-                      <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{entry.verdict?.slice(0, 40)}...</p>
+                      <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{entry.food_name || entry.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{entry.verdict?.slice(0, 40)}...</p>
                     </div>
                   </div>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", background: getScoreColor(entry.overall_score), display: "flex", alignItems: "center", justifyContent: "center" }}>

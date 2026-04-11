@@ -16,7 +16,7 @@ export default function SplashScreen({ onComplete }) {
     <motion.div
       animate={{ opacity: phase === "fade" ? 0 : 1 }}
       transition={{ duration: 0.4 }}
-      style={{ position: "fixed", inset: 0, background: "#fff", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+      style={{ position: "fixed", inset: 0, background: "var(--bg-app)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
       <motion.div
         animate={{ scale: phase === "fade" ? 1 : [1, 1.05, 1] }}
         transition={{ duration: 0.4, times: [0, 0.5, 1] }}>
@@ -25,7 +25,7 @@ export default function SplashScreen({ onComplete }) {
         </div>
       </motion.div>
       <motion.h1 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-        style={{ fontSize: 32, fontWeight: 700, color: "#1A1A24", marginTop: 16, letterSpacing: -0.5 }}>
+        style={{ fontSize: 32, fontWeight: 700, color: "var(--text-primary)", marginTop: 16, letterSpacing: -0.5 }}>
         Flourish
       </motion.h1>
     </motion.div>

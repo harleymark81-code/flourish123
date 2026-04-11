@@ -134,18 +134,18 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
           animate={{ y: 0, transition: { type: "spring", damping: 30, stiffness: 260 } }}
           exit={{ y: "100%" }}
           ref={scrollRef}
-          style={{ minHeight: "100%", background: "#fff", maxWidth: 480, margin: "0 auto", position: "relative", paddingBottom: 40 }}>
+          style={{ minHeight: "100%", background: "var(--bg-elevated)", maxWidth: 480, margin: "0 auto", position: "relative", paddingBottom: 40 }}>
 
           {/* Sticky header */}
-          <div style={{ position: "sticky", top: 0, background: "rgba(255,255,255,0.96)", backdropFilter: "blur(20px)", padding: "16px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E8E6FF", zIndex: 10 }}>
+          <div style={{ position: "sticky", top: 0, background: "var(--header-sticky)", backdropFilter: "blur(20px)", padding: "16px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", zIndex: 10 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #F6D365, #FDA085)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Crown size={14} color="#fff" />
               </div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", letterSpacing: "-0.02em" }}>Flourish Premium</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Flourish Premium</span>
             </div>
             <motion.button data-testid="paywall-close-btn" whileTap={{ scale: 0.88 }} onClick={handleClose}
-              style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <X size={16} color="#6B6A7C" />
             </motion.button>
           </div>
@@ -167,7 +167,7 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             </div>
 
             {/* Headline */}
-            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#1A1A24", lineHeight: 1.25, marginBottom: 10, textAlign: "center", letterSpacing: "-0.02em" }}>{headline}</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "var(--text-primary)", lineHeight: 1.25, marginBottom: 10, textAlign: "center", letterSpacing: "-0.02em" }}>{headline}</h1>
 
             {/* Rotating motivational subheadline */}
             <div style={{ minHeight: 52, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -184,28 +184,28 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
               </AnimatePresence>
             </div>
 
-            <p style={{ fontSize: 15, color: "#6B6A7C", lineHeight: 1.55, marginBottom: 20, textAlign: "center" }}>
+            <p style={{ fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.55, marginBottom: 20, textAlign: "center" }}>
               The food decisions you make today are either fuelling your condition or fighting it. Flourish tells you which.
             </p>
 
             {/* Price justification */}
-            <div style={{ background: "#F8F7FF", borderRadius: 14, padding: "16px 18px", marginBottom: 20, border: "1px solid #E8E6FF", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
-              <p style={{ fontSize: 13, color: "#6B6A7C", lineHeight: 1.7, margin: 0 }}>
-                People spend <strong style={{ color: "#1A1A24" }}>£5.50 on a Starbucks</strong> that spikes their cortisol.{" "}
-                <strong style={{ color: "#1A1A24" }}>£45 on one nutritionist appointment</strong> with no daily follow-up.{" "}
-                <strong style={{ color: "#1A1A24" }}>£10.99 on Netflix</strong> that has never heard of {primaryCondition.replace(/_/g, " ")}.{" "}
+            <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: "16px 18px", marginBottom: 20, border: "1px solid var(--border)", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, margin: 0 }}>
+                People spend <strong style={{ color: "var(--text-primary)" }}>£5.50 on a Starbucks</strong> that spikes their cortisol.{" "}
+                <strong style={{ color: "var(--text-primary)" }}>£45 on one nutritionist appointment</strong> with no daily follow-up.{" "}
+                <strong style={{ color: "var(--text-primary)" }}>£10.99 on Netflix</strong> that has never heard of {primaryCondition.replace(/_/g, " ")}.{" "}
                 <strong style={{ color: "#534AB7" }}>Flourish Premium is £12.99 a month. Less than two coffees.</strong> The only daily health tool built specifically for your condition.
               </p>
             </div>
 
             {/* Plan toggle */}
-            <div style={{ display: "flex", background: "#F8F7FF", borderRadius: 14, padding: 4, marginBottom: 4, border: "1px solid #E8E6FF" }}>
+            <div style={{ display: "flex", background: "var(--bg-card)", borderRadius: 14, padding: 4, marginBottom: 4, border: "1px solid var(--border)" }}>
               <button data-testid="plan-monthly-btn" onClick={() => setPlan("monthly")}
-                style={{ flex: 1, padding: "12px 8px", borderRadius: 11, border: "none", background: plan === "monthly" ? "#fff" : "transparent", fontWeight: 700, fontSize: 14, color: plan === "monthly" ? "#534AB7" : "#6B6A7C", cursor: "pointer", boxShadow: plan === "monthly" ? "0 2px 12px rgba(83,74,183,0.12)" : "none", transition: "all 0.25s" }}>
+                style={{ flex: 1, padding: "12px 8px", borderRadius: 11, border: "none", background: plan === "monthly" ? "var(--bg-elevated)" : "transparent", fontWeight: 700, fontSize: 14, color: plan === "monthly" ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", boxShadow: plan === "monthly" ? "0 2px 12px rgba(83,74,183,0.12)" : "none", transition: "all 0.25s" }}>
                 Monthly
               </button>
               <button data-testid="plan-annual-btn" onClick={() => setPlan("annual")}
-                style={{ flex: 1, padding: "12px 8px", borderRadius: 11, border: "none", background: plan === "annual" ? "#fff" : "transparent", fontWeight: 700, fontSize: 14, color: plan === "annual" ? "#534AB7" : "#6B6A7C", cursor: "pointer", boxShadow: plan === "annual" ? "0 2px 12px rgba(83,74,183,0.12)" : "none", transition: "all 0.25s", position: "relative" }}>
+                style={{ flex: 1, padding: "12px 8px", borderRadius: 11, border: "none", background: plan === "annual" ? "var(--bg-elevated)" : "transparent", fontWeight: 700, fontSize: 14, color: plan === "annual" ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", boxShadow: plan === "annual" ? "0 2px 12px rgba(83,74,183,0.12)" : "none", transition: "all 0.25s", position: "relative" }}>
                 Annual
                 <span style={{ position: "absolute", top: -10, right: 6, background: "#534AB7", color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>BEST VALUE</span>
               </button>
@@ -215,21 +215,21 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             <AnimatePresence mode="wait">
               <motion.div key={plan} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 style={{ textAlign: "center", padding: "18px 0 16px" }}>
-                <p style={{ fontSize: 13, color: "#A09FAD", textDecoration: "line-through", margin: "0 0 4px" }}>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", textDecoration: "line-through", margin: "0 0 4px" }}>
                   {plan === "monthly" ? "£19.99/month" : "£155.88/year"}
                 </p>
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
                   <span style={{ fontSize: 44, fontWeight: 800, color: "#534AB7", letterSpacing: "-0.03em" }}>
                     {plan === "monthly" ? "£12.99" : "£79"}
                   </span>
-                  <span style={{ fontSize: 16, color: "#6B6A7C", fontWeight: 500 }}>
+                  <span style={{ fontSize: 16, color: "var(--text-secondary)", fontWeight: 500 }}>
                     {plan === "monthly" ? "/month" : "/year"}
                   </span>
                 </div>
                 {plan === "annual" && (
                   <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
                     <span style={{ background: "rgba(99,153,34,0.12)", color: "#639922", fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 8 }}>Save 51%</span>
-                    <span style={{ color: "#6B6A7C", fontSize: 13 }}>£6.58/month equivalent</span>
+                    <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>£6.58/month equivalent</span>
                   </div>
                 )}
                 <p style={{ fontSize: 12, color: "#BA7517", fontWeight: 700, margin: "10px 0 2px" }}>
@@ -246,20 +246,20 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
                   <div style={{ width: 22, height: 22, borderRadius: "50%", background: "#534AB7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2)" }}>
                     <Check size={13} color="#fff" />
                   </div>
-                  <p style={{ fontSize: 15, color: "#1A1A24", margin: 0, lineHeight: 1.45 }}>{b}</p>
+                  <p style={{ fontSize: 15, color: "var(--text-primary)", margin: 0, lineHeight: 1.45 }}>{b}</p>
                 </motion.div>
               ))}
             </div>
 
             {/* Testimonials */}
-            <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 20, marginBottom: 20, border: "1px solid #E8E6FF", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
-              <p style={{ fontSize: 11, fontWeight: 800, color: "#6B6A7C", textTransform: "uppercase", letterSpacing: 1.2, margin: "0 0 14px" }}>Beta feedback</p>
+            <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 20, border: "1px solid var(--border)", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
+              <p style={{ fontSize: 11, fontWeight: 800, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 1.2, margin: "0 0 14px" }}>Beta feedback</p>
               <AnimatePresence mode="wait">
                 <motion.div key={testimonialIdx} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.28 }}>
                   <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
                     {[1,2,3,4,5].map(s => <Star key={s} size={15} color="#F59E0B" fill="#F59E0B" />)}
                   </div>
-                  <p style={{ fontSize: 15, color: "#1A1A24", fontStyle: "italic", lineHeight: 1.6, margin: "0 0 10px" }}>
+                  <p style={{ fontSize: 15, color: "var(--text-primary)", fontStyle: "italic", lineHeight: 1.6, margin: "0 0 10px" }}>
                     "{TESTIMONIALS[testimonialIdx].text}"
                   </p>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "#534AB7", margin: 0 }}>
@@ -270,7 +270,7 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             </div>
 
             {/* Trust */}
-            <p style={{ fontSize: 13, color: "#6B6A7C", textAlign: "center", marginBottom: 20, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", textAlign: "center", marginBottom: 20, lineHeight: 1.5 }}>
               Trusted by people managing PCOS, autoimmune, and thyroid conditions.
             </p>
 
@@ -301,11 +301,11 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             </motion.button>
 
             <button data-testid="maybe-later-btn" onClick={handleClose}
-              style={{ width: "100%", background: "none", border: "none", color: "#A09FAD", fontSize: 14, cursor: "pointer", padding: "8px 0", fontWeight: 500 }}>
+              style={{ width: "100%", background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, cursor: "pointer", padding: "8px 0", fontWeight: 500 }}>
               Maybe later
             </button>
 
-            <p style={{ fontSize: 11, color: "#B0AEBB", textAlign: "center", lineHeight: 1.6, marginTop: 16 }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6, marginTop: 16 }}>
               Flourish provides AI powered nutritional guidance. Not a substitute for medical advice.
             </p>
           </div>
@@ -318,16 +318,16 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             style={{ position: "fixed", inset: 0, zIndex: 6000, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }}
-              style={{ background: "#fff", borderRadius: 20, padding: "28px 24px", maxWidth: 360, width: "100%", textAlign: "center" }}>
+              style={{ background: "var(--bg-elevated)", borderRadius: 20, padding: "28px 24px", maxWidth: 360, width: "100%", textAlign: "center" }}>
               <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
-              <p style={{ fontSize: 18, fontWeight: 800, color: "#1A1A24", marginBottom: 8, letterSpacing: "-0.02em" }}>Early access price locks in forever after launch.</p>
-              <p style={{ fontSize: 14, color: "#6B6A7C", marginBottom: 24 }}>We would love to have you.</p>
+              <p style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)", marginBottom: 8, letterSpacing: "-0.02em" }}>Early access price locks in forever after launch.</p>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 24 }}>We would love to have you.</p>
               <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowExit(false)}
                 style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "14px 24px", fontWeight: 700, cursor: "pointer", marginBottom: 10, fontSize: 15 }}>
                 OK, I'll stay
               </motion.button>
               <button onClick={() => { setShowExit(false); onClose(); }}
-                style={{ background: "none", border: "none", color: "#A09FAD", fontSize: 14, cursor: "pointer" }}>
+                style={{ background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, cursor: "pointer" }}>
                 No thanks
               </button>
             </motion.div>

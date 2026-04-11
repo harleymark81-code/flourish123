@@ -61,8 +61,8 @@ export default function AffiliateDashboard() {
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: "60px 24px 80px" }}>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Affiliate Dashboard</h1>
-        <p style={{ color: "#6B6A7C" }}>Track your performance and earnings</p>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Affiliate Dashboard</h1>
+        <p style={{ color: "var(--text-secondary)" }}>Track your performance and earnings</p>
         {data?.status === "pending" && (
           <div style={{ background: "rgba(186,117,23,0.1)", border: "1px solid rgba(186,117,23,0.3)", borderRadius: 10, padding: "10px 16px", marginTop: 12 }}>
             <p style={{ color: "#BA7517", fontSize: 13, margin: 0, fontWeight: 600 }}>Your application is pending approval. Commission tracking is already active.</p>
@@ -72,10 +72,10 @@ export default function AffiliateDashboard() {
       </div>
 
       {/* Link */}
-      <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 20, marginBottom: 24, border: "1px solid #E8E6FF" }}>
-        <p style={{ fontSize: 13, fontWeight: 600, color: "#6B6A7C", margin: "0 0 8px" }}>Your affiliate link</p>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 24, border: "1px solid var(--border)" }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 8px" }}>Your affiliate link</p>
         <div style={{ display: "flex", gap: 8 }}>
-          <div style={{ flex: 1, background: "#fff", borderRadius: 10, padding: "10px 12px", border: "1px solid #E8E6FF" }}>
+          <div style={{ flex: 1, background: "var(--bg-elevated)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border)" }}>
             <p style={{ fontSize: 13, color: "#534AB7", margin: 0, wordBreak: "break-all" }}>{affiliateLink}</p>
           </div>
           <motion.button whileTap={{ scale: 0.9 }} onClick={handleShare}
@@ -89,10 +89,10 @@ export default function AffiliateDashboard() {
       {data && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
           {stats.map(s => (
-            <div key={s.label} style={{ background: "#F8F7FF", borderRadius: 12, padding: 20, border: "1px solid #E8E6FF", textAlign: "center" }}>
+            <div key={s.label} style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, border: "1px solid var(--border)", textAlign: "center" }}>
               <div style={{ color: s.color, marginBottom: 8 }}>{s.icon}</div>
               <p style={{ fontSize: 24, fontWeight: 700, color: s.color, margin: 0 }}>{s.value}</p>
-              <p style={{ fontSize: 12, color: "#6B6A7C", margin: "4px 0 0" }}>{s.label}</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 0" }}>{s.label}</p>
             </div>
           ))}
         </div>
@@ -106,9 +106,9 @@ export default function AffiliateDashboard() {
       </div>
 
       {/* Withdraw */}
-      <div style={{ background: "#F8F7FF", borderRadius: 12, padding: 16, border: "1px solid #E8E6FF", textAlign: "center" }}>
-        <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A24", margin: "0 0 4px" }}>Withdraw earnings</p>
-        <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>Manual payouts processed monthly — contact us to claim</p>
+      <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)", textAlign: "center" }}>
+        <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 4px" }}>Withdraw earnings</p>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Manual payouts processed monthly — contact us to claim</p>
       </div>
     </div>
   );

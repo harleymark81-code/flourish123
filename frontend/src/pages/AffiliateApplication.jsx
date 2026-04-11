@@ -75,8 +75,8 @@ export default function AffiliateApplication() {
           style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(99,153,34,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
           <span style={{ fontSize: 40 }}>✓</span>
         </motion.div>
-        <h2 style={{ fontSize: 24, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Application submitted!</h2>
-        <p style={{ fontSize: 16, color: "#6B6A7C" }}>Your application has been submitted. We will be in touch within 48 hours.</p>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Application submitted!</h2>
+        <p style={{ fontSize: 16, color: "var(--text-secondary)" }}>Your application has been submitted. We will be in touch within 48 hours.</p>
         <button onClick={() => window.location.href = "/"} style={{ marginTop: 20, background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "14px 28px", fontWeight: 600, cursor: "pointer" }}>
           Back to Flourish
         </button>
@@ -91,12 +91,12 @@ export default function AffiliateApplication() {
         <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
           <span style={{ fontSize: 36 }}>🌸</span>
         </div>
-        <h1 style={{ fontSize: 30, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Become a Flourish Affiliate</h1>
-        <p style={{ fontSize: 16, color: "#6B6A7C", marginTop: 8 }}>Earn 30% commission helping people with hormonal conditions live better.</p>
+        <h1 style={{ fontSize: 30, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Become a Flourish Affiliate</h1>
+        <p style={{ fontSize: 16, color: "var(--text-secondary)", marginTop: 8 }}>Earn 30% commission helping people with hormonal conditions live better.</p>
       </div>
 
       {/* Benefits */}
-      <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 20, marginBottom: 32, border: "1px solid #E8E6FF" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 32, border: "1px solid var(--border)" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {[
             ["30%", "Commission rate"],
@@ -106,7 +106,7 @@ export default function AffiliateApplication() {
           ].map(([val, label]) => (
             <div key={label} style={{ textAlign: "center" }}>
               <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{val}</p>
-              <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{label}</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{label}</p>
             </div>
           ))}
         </div>
@@ -116,28 +116,28 @@ export default function AffiliateApplication() {
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {fields.map(field => (
           <div key={field.key}>
-            <label style={{ fontSize: 14, fontWeight: 600, color: "#1A1A24", display: "block", marginBottom: 6 }}>{field.label}</label>
+            <label style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: 6 }}>{field.label}</label>
             <input
               data-testid={`affiliate-${field.key}`}
               type={field.type}
               value={formData[field.key]}
               onChange={e => { setFormData(prev => ({ ...prev, [field.key]: e.target.value })); setErrors(prev => ({ ...prev, [field.key]: "" })); }}
               placeholder={field.placeholder}
-              style={{ width: "100%", background: "#F8F7FF", border: `2px solid ${errors[field.key] ? "#A32D2D" : "#E8E6FF"}`, borderRadius: 12, padding: "13px 16px", fontSize: 15, outline: "none", color: "#1A1A24", boxSizing: "border-box" }}
+              style={{ width: "100%", background: "var(--input-bg)", border: `2px solid ${errors[field.key] ? "#A32D2D" : "var(--border)"}`, borderRadius: 12, padding: "13px 16px", fontSize: 15, outline: "none", color: "var(--input-text)", boxSizing: "border-box" }}
             />
             {errors[field.key] && <p style={{ color: "#A32D2D", fontSize: 12, margin: "4px 0 0" }}>{errors[field.key]}</p>}
           </div>
         ))}
 
         <div>
-          <label style={{ fontSize: 14, fontWeight: 600, color: "#1A1A24", display: "block", marginBottom: 6 }}>Tell us about your audience</label>
+          <label style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: 6 }}>Tell us about your audience</label>
           <textarea
             data-testid="affiliate-description"
             value={formData.description}
             onChange={e => { setFormData(prev => ({ ...prev, description: e.target.value })); setErrors(prev => ({ ...prev, description: "" })); }}
             placeholder="Describe your audience, content style, and why Flourish is a good fit..."
             rows={4}
-            style={{ width: "100%", background: "#F8F7FF", border: `2px solid ${errors.description ? "#A32D2D" : "#E8E6FF"}`, borderRadius: 12, padding: "13px 16px", fontSize: 15, outline: "none", color: "#1A1A24", resize: "none", boxSizing: "border-box" }}
+            style={{ width: "100%", background: "var(--input-bg)", border: `2px solid ${errors.description ? "#A32D2D" : "var(--border)"}`, borderRadius: 12, padding: "13px 16px", fontSize: 15, outline: "none", color: "var(--input-text)", resize: "none", boxSizing: "border-box" }}
           />
           {errors.description && <p style={{ color: "#A32D2D", fontSize: 12, margin: "4px 0 0" }}>{errors.description}</p>}
         </div>

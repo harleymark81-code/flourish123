@@ -70,7 +70,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
         initial={{ y: "100%" }}
         animate={{ y: 0, transition: { type: "spring", damping: 28, stiffness: 300 } }}
         exit={{ y: "100%" }}
-        style={{ width: "100%", maxWidth: 480, background: "#fff", borderRadius: "24px 24px 0 0", display: "flex", flexDirection: "column", maxHeight: "92vh", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        style={{ width: "100%", maxWidth: 480, background: "var(--bg-elevated)", borderRadius: "24px 24px 0 0", display: "flex", flexDirection: "column", maxHeight: "92vh", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
 
         {/* Header */}
         <div style={{ padding: "20px 20px 0", flexShrink: 0 }}>
@@ -79,10 +79,10 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
               <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #F59E0B, #D97706)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Crown size={18} color="#fff" />
               </div>
-              <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1A1A24", margin: 0 }}>My Subscription</h2>
+              <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>My Subscription</h2>
             </div>
             <motion.button whileTap={{ scale: 0.9 }} onClick={onClose}
-              style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <X size={16} color="#6B6A7C" />
             </motion.button>
           </div>
@@ -92,7 +92,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
         <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 20px", flex: 1 }}>
 
           {/* Current plan badge */}
-          <div style={{ background: isPremium ? "linear-gradient(135deg, #534AB7, #756AD9)" : "#F8F7FF", borderRadius: 16, padding: 20, marginBottom: 20, border: isPremium ? "none" : "1px solid #E8E6FF" }}>
+          <div style={{ background: isPremium ? "linear-gradient(135deg, #534AB7, #756AD9)" : "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 20, border: isPremium ? "none" : "1px solid var(--border)" }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: isPremium ? "rgba(255,255,255,0.7)" : "#6B6A7C", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Current plan</p>
             <p style={{ fontSize: 22, fontWeight: 800, color: isPremium ? "#fff" : "#1A1A24", margin: "0 0 4px" }}>
               {isPremium ? `Flourish Premium — ${planLabel}` : "Flourish Free"}
@@ -100,22 +100,22 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
             {isPremium ? (
               <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", margin: 0 }}>{planPrice} · Renews automatically</p>
             ) : (
-              <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>5 food ratings per day · Upgrade to unlock everything</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>5 food ratings per day · Upgrade to unlock everything</p>
             )}
           </div>
 
           {/* Feature comparison */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 15, fontWeight: 700, color: "#1A1A24", marginBottom: 12 }}>What's included</p>
+            <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>What's included</p>
 
             {/* Free tier */}
-            <div style={{ background: "#F8F7FF", borderRadius: 14, padding: "14px 16px", marginBottom: 10, border: "1px solid #E8E6FF" }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "#6B6A7C", margin: "0 0 10px" }}>Free</p>
+            <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: "14px 16px", marginBottom: 10, border: "1px solid var(--border)" }}>
+              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 10px" }}>Free</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {FEATURES_FREE.map(f => (
                   <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Check size={14} color="#639922" />
-                    <span style={{ fontSize: 13, color: "#1A1A24" }}>{f}</span>
+                    <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{f}</span>
                   </div>
                 ))}
               </div>
@@ -131,7 +131,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
                 {FEATURES_PREMIUM.map(f => (
                   <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <Check size={14} color="#534AB7" />
-                    <span style={{ fontSize: 13, color: "#1A1A24" }}>{f}</span>
+                    <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{f}</span>
                   </div>
                 ))}
               </div>
@@ -150,8 +150,8 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
               whileTap={{ scale: 0.97 }}
               onClick={handlePortal}
               disabled={loadingPortal}
-              style={{ width: "100%", background: "#F8F7FF", border: "2px solid #E8E6FF", borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "#1A1A24" }}>
+              style={{ width: "100%", background: "var(--bg-card)", border: "2px solid var(--border)", borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: 10 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
                 {loadingPortal ? "Opening portal..." : "Manage / Cancel subscription"}
               </span>
               {loadingPortal ? <Loader size={18} color="#6B6A7C" style={{ animation: "spin 1s linear infinite" }} /> : <ChevronRight size={18} color="#6B6A7C" />}
@@ -180,7 +180,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
                 whileTap={{ scale: 0.97 }}
                 onClick={() => handleCheckout("annual")}
                 disabled={!!loadingCheckout}
-                style={{ width: "100%", background: "#fff", border: "2px solid #534AB7", borderRadius: 14, padding: "17px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", position: "relative" }}>
+                style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid #534AB7", borderRadius: 14, padding: "17px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", position: "relative" }}>
                 <div style={{ position: "absolute", top: -10, right: 16, background: "#F59E0B", borderRadius: 20, padding: "2px 10px" }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>SAVE 49%</span>
                 </div>
@@ -188,7 +188,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
                   <p style={{ fontSize: 16, fontWeight: 800, color: "#534AB7", margin: 0 }}>
                     {loadingCheckout === "annual" ? "Loading..." : "Start free trial — Annual"}
                   </p>
-                  <p style={{ fontSize: 12, color: "#6B6A7C", margin: "2px 0 0" }}>£79/year · 3 days free · Cancel anytime</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>£79/year · 3 days free · Cancel anytime</p>
                 </div>
                 {loadingCheckout === "annual"
                   ? <Loader size={18} color="#534AB7" />
@@ -197,7 +197,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
             </div>
           )}
 
-          <p style={{ fontSize: 11, color: "#B0AEBB", textAlign: "center", marginTop: 12, lineHeight: 1.6, paddingBottom: 8 }}>
+          <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 12, lineHeight: 1.6, paddingBottom: 8 }}>
             Subscriptions managed via Stripe. Cancel anytime — no charge during your 3-day free trial.
           </p>
         </div>

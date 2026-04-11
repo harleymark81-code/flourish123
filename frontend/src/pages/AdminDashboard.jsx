@@ -6,9 +6,9 @@ const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 function StatCard({ label, value, color }) {
   return (
-    <div style={{ background: "#F8F7FF", borderRadius: 12, padding: 20, border: "1px solid #E8E6FF", textAlign: "center" }}>
+    <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, border: "1px solid var(--border)", textAlign: "center" }}>
       <p style={{ fontSize: 28, fontWeight: 700, color: color || "#534AB7", margin: 0 }}>{value}</p>
-      <p style={{ fontSize: 13, color: "#6B6A7C", margin: "4px 0 0" }}>{label}</p>
+      <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "4px 0 0" }}>{label}</p>
     </div>
   );
 }
@@ -89,8 +89,8 @@ export default function AdminDashboard() {
   if (!token) {
     return (
       <div style={{ maxWidth: 400, margin: "100px auto", padding: 40, textAlign: "center" }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Admin Dashboard</h1>
-        <p style={{ color: "#6B6A7C", marginBottom: 32 }}>Flourish admin access</p>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Admin Dashboard</h1>
+        <p style={{ color: "var(--text-secondary)", marginBottom: 32 }}>Flourish admin access</p>
         <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <input
             data-testid="admin-password-input"
@@ -98,7 +98,7 @@ export default function AdminDashboard() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             placeholder="Admin password"
-            style={{ background: "#F8F7FF", border: "2px solid #E8E6FF", borderRadius: 12, padding: "14px 16px", fontSize: 15, outline: "none" }}
+            style={{ background: "var(--bg-card)", border: "2px solid #E8E6FF", borderRadius: 12, padding: "14px 16px", fontSize: 15, outline: "none" }}
           />
           {error && <p style={{ color: "#A32D2D", fontSize: 14 }}>{error}</p>}
           <button data-testid="admin-login-btn" type="submit" disabled={loading}
@@ -116,20 +116,20 @@ export default function AdminDashboard() {
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Flourish Admin</h1>
-          <p style={{ color: "#6B6A7C", margin: "4px 0 0" }}>Auto-refreshes every 30 seconds</p>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Flourish Admin</h1>
+          <p style={{ color: "var(--text-secondary)", margin: "4px 0 0" }}>Auto-refreshes every 30 seconds</p>
         </div>
         <button onClick={() => { localStorage.removeItem("admin_token"); setToken(null); }}
-          style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, padding: "8px 16px", cursor: "pointer", color: "#6B6A7C" }}>
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 16px", cursor: "pointer", color: "var(--text-secondary)" }}>
           Sign out
         </button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, background: "#F8F7FF", borderRadius: 12, padding: 4, marginBottom: 24 }}>
+      <div style={{ display: "flex", gap: 4, background: "var(--bg-card)", borderRadius: 12, padding: 4, marginBottom: 24 }}>
         {TABS.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
-            style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "none", background: activeTab === tab ? "#fff" : "transparent", fontWeight: 600, fontSize: 13, color: activeTab === tab ? "#534AB7" : "#6B6A7C", cursor: "pointer", textTransform: "capitalize", boxShadow: activeTab === tab ? "0 2px 8px rgba(83,74,183,0.1)" : "none" }}>
+            style={{ flex: 1, padding: "10px 8px", borderRadius: 10, border: "none", background: activeTab === tab ? "var(--bg-elevated)" : "transparent", fontWeight: 600, fontSize: 13, color: activeTab === tab ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", textTransform: "capitalize", boxShadow: activeTab === tab ? "0 2px 8px rgba(83,74,183,0.1)" : "none" }}>
             {tab}
           </button>
         ))}
@@ -149,7 +149,7 @@ export default function AdminDashboard() {
       {activeTab === "users" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Users ({users.length})</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Users ({users.length})</h2>
             <button onClick={() => exportCSV(users, "flourish_users.csv")} style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               Export CSV
             </button>
@@ -157,25 +157,25 @@ export default function AdminDashboard() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#F8F7FF" }}>
+                <tr style={{ background: "var(--bg-card)" }}>
                   {["Email", "Name", "Conditions", "Goals", "Premium", "Joined"].map(h => (
-                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#6B6A7C", fontWeight: 600, borderBottom: "1px solid #E8E6FF" }}>{h}</th>
+                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-secondary)", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {users.map(u => (
-                  <tr key={u.id} style={{ borderBottom: "1px solid #F8F7FF" }}>
-                    <td style={{ padding: "10px 12px", color: "#1A1A24" }}>{u.email}</td>
-                    <td style={{ padding: "10px 12px", color: "#1A1A24" }}>{u.name}</td>
-                    <td style={{ padding: "10px 12px", color: "#6B6A7C" }}>{(u.conditions || []).join(", ")}</td>
-                    <td style={{ padding: "10px 12px", color: "#6B6A7C" }}>{(u.goals || []).join(", ")}</td>
+                  <tr key={u.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)" }}>{u.email}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)" }}>{u.name}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{(u.conditions || []).join(", ")}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{(u.goals || []).join(", ")}</td>
                     <td style={{ padding: "10px 12px" }}>
-                      <span style={{ background: u.is_premium ? "rgba(99,153,34,0.12)" : "#F8F7FF", color: u.is_premium ? "#639922" : "#A09FAD", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
+                      <span style={{ background: u.is_premium ? "rgba(99,153,34,0.12)" : "var(--bg-card)", color: u.is_premium ? "#639922" : "var(--text-muted)", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
                         {u.is_premium ? "Premium" : "Free"}
                       </span>
                     </td>
-                    <td style={{ padding: "10px 12px", color: "#6B6A7C" }}>{u.created_at?.split("T")[0]}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{u.created_at?.split("T")[0]}</td>
                   </tr>
                 ))}
               </tbody>
@@ -188,7 +188,7 @@ export default function AdminDashboard() {
       {activeTab === "subscriptions" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Transactions ({transactions.length})</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Transactions ({transactions.length})</h2>
             <button onClick={() => exportCSV(transactions, "flourish_transactions.csv")} style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               Export CSV
             </button>
@@ -196,24 +196,24 @@ export default function AdminDashboard() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#F8F7FF" }}>
+                <tr style={{ background: "var(--bg-card)" }}>
                   {["Email", "Plan", "Amount", "Status", "Date"].map(h => (
-                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "#6B6A7C", fontWeight: 600, borderBottom: "1px solid #E8E6FF" }}>{h}</th>
+                    <th key={h} style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-secondary)", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {transactions.map(t => (
-                  <tr key={t.id} style={{ borderBottom: "1px solid #F8F7FF" }}>
-                    <td style={{ padding: "10px 12px", color: "#1A1A24" }}>{t.email}</td>
-                    <td style={{ padding: "10px 12px", color: "#6B6A7C", textTransform: "capitalize" }}>{t.plan}</td>
-                    <td style={{ padding: "10px 12px", color: "#1A1A24", fontWeight: 600 }}>£{t.amount}</td>
+                  <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)" }}>{t.email}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)", textTransform: "capitalize" }}>{t.plan}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-primary)", fontWeight: 600 }}>£{t.amount}</td>
                     <td style={{ padding: "10px 12px" }}>
                       <span style={{ background: t.payment_status === "paid" ? "rgba(99,153,34,0.12)" : "rgba(186,117,23,0.12)", color: t.payment_status === "paid" ? "#639922" : "#BA7517", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
                         {t.payment_status}
                       </span>
                     </td>
-                    <td style={{ padding: "10px 12px", color: "#6B6A7C" }}>{t.created_at?.split("T")[0]}</td>
+                    <td style={{ padding: "10px 12px", color: "var(--text-secondary)" }}>{t.created_at?.split("T")[0]}</td>
                   </tr>
                 ))}
               </tbody>
@@ -226,20 +226,20 @@ export default function AdminDashboard() {
       {activeTab === "affiliates" && (
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Affiliate Applications ({affiliates.length})</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Affiliate Applications ({affiliates.length})</h2>
             <button onClick={() => exportCSV(affiliates, "flourish_affiliates.csv")} style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
               Export CSV
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {affiliates.map(a => (
-              <div key={a.id} style={{ background: "#F8F7FF", borderRadius: 12, padding: 16, border: "1px solid #E8E6FF" }}>
+              <div key={a.id} style={{ background: "var(--bg-card)", borderRadius: 12, padding: 16, border: "1px solid var(--border)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", margin: 0 }}>{a.name}</p>
-                    <p style={{ fontSize: 13, color: "#6B6A7C", margin: "2px 0" }}>{a.email}</p>
-                    <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>Niche: {a.condition_niche} · Audience: {a.audience_size}</p>
-                    <p style={{ fontSize: 13, color: "#1A1A24", margin: "6px 0 0" }}>{a.description}</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{a.name}</p>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "2px 0" }}>{a.email}</p>
+                    <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Niche: {a.condition_niche} · Audience: {a.audience_size}</p>
+                    <p style={{ fontSize: 13, color: "var(--text-primary)", margin: "6px 0 0" }}>{a.description}</p>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, marginLeft: 12 }}>
                     <span style={{ background: a.status === "approved" ? "rgba(99,153,34,0.12)" : a.status === "rejected" ? "rgba(163,45,45,0.12)" : "rgba(186,117,23,0.12)", color: a.status === "approved" ? "#639922" : a.status === "rejected" ? "#A32D2D" : "#BA7517", padding: "3px 10px", borderRadius: 6, fontSize: 12, fontWeight: 700, textTransform: "capitalize", textAlign: "center" }}>
@@ -255,7 +255,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
-            {affiliates.length === 0 && <p style={{ color: "#6B6A7C", textAlign: "center", padding: 40 }}>No affiliate applications yet.</p>}
+            {affiliates.length === 0 && <p style={{ color: "var(--text-secondary)", textAlign: "center", padding: 40 }}>No affiliate applications yet.</p>}
           </div>
         </div>
       )}
@@ -263,16 +263,16 @@ export default function AdminDashboard() {
       {/* Activity */}
       {activeTab === "activity" && (
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1A1A24", marginBottom: 16 }}>Daily Food Ratings (Last 30 days)</h2>
-          <div style={{ background: "#F8F7FF", borderRadius: 16, padding: 24, border: "1px solid #E8E6FF" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>Daily Food Ratings (Last 30 days)</h2>
+          <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 24, border: "1px solid var(--border)" }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 120, overflowX: "auto" }}>
               {activity.map((d, i) => (
                 <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 28 }}>
                   <div style={{ width: 20, background: "#534AB7", borderRadius: "4px 4px 0 0", height: `${Math.round((d.count / maxActivity) * 100)}px`, minHeight: 4 }} />
-                  <span style={{ fontSize: 9, color: "#6B6A7C", whiteSpace: "nowrap" }}>{d.date.slice(5)}</span>
+                  <span style={{ fontSize: 9, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{d.date.slice(5)}</span>
                 </div>
               ))}
-              {activity.length === 0 && <p style={{ color: "#6B6A7C" }}>No activity data yet.</p>}
+              {activity.length === 0 && <p style={{ color: "var(--text-secondary)" }}>No activity data yet.</p>}
             </div>
           </div>
         </div>

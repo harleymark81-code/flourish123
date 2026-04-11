@@ -104,7 +104,7 @@ export default function FoodDiary({ onOpenPaywall }) {
   // Free user premium gate — AFTER all hooks
   if (!isPremium) {
     return (
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: 80 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: 80 }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: "center" }}>
           <motion.div
             animate={{ scale: [1, 1.04, 1] }}
@@ -112,8 +112,8 @@ export default function FoodDiary({ onOpenPaywall }) {
             style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", boxShadow: "0 8px 32px rgba(83,74,183,0.25)" }}>
             <BookOpen size={36} color="#fff" />
           </motion.div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, color: "#1A1A24", marginBottom: 12, letterSpacing: "-0.02em" }}>Your Food Diary</h2>
-          <p style={{ fontSize: 15, color: "#6B6A7C", lineHeight: 1.65, marginBottom: 28 }}>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.02em" }}>Your Food Diary</h2>
+          <p style={{ fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 28 }}>
             Your food diary is a Flourish Premium feature. Track every food you eat, see your patterns, and watch your health transform.
           </p>
           <motion.button
@@ -123,38 +123,38 @@ export default function FoodDiary({ onOpenPaywall }) {
             style={{ width: "100%", background: "linear-gradient(135deg, #534AB7, #756AD9)", color: "#fff", border: "none", borderRadius: 14, padding: "17px 24px", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 20px rgba(83,74,183,0.3), inset 0 1px 0 rgba(255,255,255,0.15)", minHeight: 56 }}>
             Unlock with your 3-day free trial
           </motion.button>
-          <p style={{ fontSize: 13, color: "#A09FAD", marginTop: 12 }}>Cancel anytime. No charge for 3 days.</p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 12 }}>Cancel anytime. No charge for 3 days.</p>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "#fff", paddingBottom: 80, paddingTop: 56 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 80, paddingTop: 56 }}>
       <div style={{ padding: "0 20px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1A1A24", margin: 0, letterSpacing: "-0.02em" }}>Food Diary</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", margin: 0, letterSpacing: "-0.02em" }}>Food Diary</h1>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Flame size={18} color={stats?.streak >= 7 ? "#534AB7" : "#F97316"} />
-            <span style={{ fontWeight: 700, color: "#1A1A24", fontSize: 16 }}>{stats?.streak || 0}</span>
+            <span style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: 16 }}>{stats?.streak || 0}</span>
           </div>
         </div>
 
         {/* Monthly stats */}
         {monthlyStats && (
-          <div style={{ background: "#F8F7FF", borderRadius: 14, padding: 16, marginBottom: 16, border: "1px solid #E8E6FF", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 16px rgba(83,74,183,0.08)" }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 16, marginBottom: 16, border: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 16px rgba(83,74,183,0.08)" }}>
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: 22, fontWeight: 800, color: getScoreColor(monthlyStats.avg), margin: 0 }}>{monthlyStats.avg}</p>
-              <p style={{ fontSize: 11, color: "#6B6A7C", margin: 0 }}>Monthly avg</p>
+              <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Monthly avg</p>
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "#639922", margin: 0 }}>Best day</p>
-              <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{formatDate(monthlyStats.best?.date)} ({monthlyStats.best?.avg_score})</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{formatDate(monthlyStats.best?.date)} ({monthlyStats.best?.avg_score})</p>
             </div>
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: "#A32D2D", margin: 0 }}>Worst day</p>
-              <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{formatDate(monthlyStats.worst?.date)} ({monthlyStats.worst?.avg_score})</p>
+              <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{formatDate(monthlyStats.worst?.date)} ({monthlyStats.worst?.avg_score})</p>
             </div>
           </div>
         )}
@@ -162,18 +162,18 @@ export default function FoodDiary({ onOpenPaywall }) {
         {/* Date nav */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <motion.button whileTap={{ scale: 0.88 }} onClick={() => navigateDate(-1)}
-            style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <ChevronLeft size={16} color="#534AB7" />
           </motion.button>
           <div style={{ textAlign: "center" }}>
-            <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", margin: 0 }}>
+            <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
               {selectedDate === today ? "Today" : formatDate(selectedDate)}
             </p>
-            <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{entries.length} food{entries.length !== 1 ? "s" : ""} logged</p>
+            <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{entries.length} food{entries.length !== 1 ? "s" : ""} logged</p>
           </div>
           <motion.button whileTap={{ scale: 0.88 }}
             onClick={() => selectedDate < today && navigateDate(1)}
-            style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: selectedDate < today ? "pointer" : "not-allowed", opacity: selectedDate < today ? 1 : 0.4 }}>
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 40, height: 40, display: "flex", alignItems: "center", justifyContent: "center", cursor: selectedDate < today ? "pointer" : "not-allowed", opacity: selectedDate < today ? 1 : 0.4 }}>
             <ChevronRight size={16} color="#534AB7" />
           </motion.button>
         </div>
@@ -185,12 +185,12 @@ export default function FoodDiary({ onOpenPaywall }) {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search foods..."
-            style={{ flex: 1, background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, padding: "10px 14px", fontSize: 16, outline: "none", color: "#1A1A24" }}
+            style={{ flex: 1, background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", fontSize: 16, outline: "none", color: "var(--input-text)" }}
           />
           <div style={{ display: "flex", gap: 4 }}>
             {["all", "green", "amber", "red"].map(f => (
               <button key={f} onClick={() => setFilter(f)}
-                style={{ background: filter === f ? "#534AB7" : "#F8F7FF", border: `1px solid ${filter === f ? "#534AB7" : "#E8E6FF"}`, borderRadius: 8, width: 32, height: 42, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                style={{ background: filter === f ? "#534AB7" : "var(--bg-card)", border: `1px solid ${filter === f ? "#534AB7" : "var(--border)"}`, borderRadius: 8, width: 32, height: 42, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: f === "all" ? "#534AB7" : f === "green" ? "#639922" : f === "amber" ? "#BA7517" : "#A32D2D", opacity: filter === f ? 1 : 0.4 }} />
               </button>
             ))}
@@ -205,25 +205,25 @@ export default function FoodDiary({ onOpenPaywall }) {
               <motion.div animate={{ scale: [1, 1.04, 1] }} transition={{ duration: 2, repeat: Infinity }}>
                 <span style={{ fontSize: 48 }}>🍽️</span>
               </motion.div>
-              <p style={{ fontSize: 16, fontWeight: 700, color: "#6B6A7C", marginTop: 12 }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-secondary)", marginTop: 12 }}>
                 {searchQuery ? "No foods matching your search." : "No foods logged yet."}
               </p>
-              <p style={{ fontSize: 14, color: "#A09FAD" }}>
+              <p style={{ fontSize: 14, color: "var(--text-muted)" }}>
                 {searchQuery ? "Try a different name." : "Rate a food from the home screen to start tracking."}
               </p>
             </motion.div>
           ) : (
             filteredEntries.map((entry, i) => (
               <motion.div key={entry.id || i} layout initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.05 } }} exit={{ opacity: 0, height: 0 }}
-                style={{ background: "#F8F7FF", borderRadius: 16, padding: 16, border: "1px solid #E8E6FF", marginBottom: 12, boxShadow: "0 2px 16px rgba(83,74,183,0.07)" }}>
+                style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", marginBottom: 12, boxShadow: "0 2px 16px rgba(83,74,183,0.07)" }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "#fff", border: "1px solid #E8E6FF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "var(--bg-elevated)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                       {entry.product_image ? <img src={entry.product_image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} /> : <span style={{ fontSize: 22 }}>🍽️</span>}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#1A1A24", margin: "0 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name || entry.name}</p>
-                      <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0, lineHeight: 1.3 }}>{(entry.verdict || "").slice(0, 55)}...</p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.food_name || entry.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.3 }}>{(entry.verdict || "").slice(0, 55)}...</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
@@ -242,7 +242,7 @@ export default function FoodDiary({ onOpenPaywall }) {
                   onChange={e => setNoteEdit(prev => ({ ...prev, [entry.id]: e.target.value }))}
                   onBlur={e => handleSaveNote(entry.id, e.target.value)}
                   placeholder="How did you feel after eating this?"
-                  style={{ width: "100%", background: "#fff", border: "1px solid #E8E6FF", borderRadius: 8, padding: "8px 10px", fontSize: 14, color: "#1A1A24", resize: "none", outline: "none", lineHeight: 1.4, boxSizing: "border-box", minHeight: 48 }}
+                  style={{ width: "100%", background: "var(--input-bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px", fontSize: 14, color: "var(--input-text)", resize: "none", outline: "none", lineHeight: 1.4, boxSizing: "border-box", minHeight: 48 }}
                   rows={2}
                 />
               </motion.div>
@@ -257,11 +257,11 @@ export default function FoodDiary({ onOpenPaywall }) {
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             style={{ position: "fixed", inset: 0, zIndex: 9500, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }}
-              style={{ background: "#fff", borderRadius: 20, padding: 24, maxWidth: 320, width: "100%", textAlign: "center" }}>
-              <p style={{ fontSize: 16, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Remove from diary?</p>
-              <p style={{ fontSize: 14, color: "#6B6A7C", marginBottom: 20 }}>This will permanently remove this entry.</p>
+              style={{ background: "var(--bg-elevated)", borderRadius: 20, padding: 24, maxWidth: 320, width: "100%", textAlign: "center" }}>
+              <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Remove from diary?</p>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 20 }}>This will permanently remove this entry.</p>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, padding: "12px", fontWeight: 600, cursor: "pointer", color: "#6B6A7C", minHeight: 44 }}>Cancel</button>
+                <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px", fontWeight: 600, cursor: "pointer", color: "var(--text-secondary)", minHeight: 44 }}>Cancel</button>
                 <button onClick={() => handleDelete(confirmDelete)} style={{ flex: 1, background: "#A32D2D", border: "none", borderRadius: 10, padding: "12px", fontWeight: 700, cursor: "pointer", color: "#fff", minHeight: 44 }}>Remove</button>
               </div>
             </motion.div>

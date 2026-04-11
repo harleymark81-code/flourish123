@@ -69,7 +69,7 @@ export default function SymptomTracker({ onClose }) {
         style={{
           width: "100%",
           maxWidth: 480,
-          background: "#fff",
+          background: "var(--bg-elevated)",
           borderRadius: "24px 24px 0 0",
           display: "flex",
           flexDirection: "column",
@@ -81,12 +81,12 @@ export default function SymptomTracker({ onClose }) {
         {/* Fixed header */}
         <div style={{ padding: "20px 20px 0", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1A1A24", margin: 0 }}>How are you feeling today?</h2>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={onClose} style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>How are you feeling today?</h2>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={onClose} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
               <X size={16} color="#6B6A7C" />
             </motion.button>
           </div>
-          <p style={{ fontSize: 14, color: "#6B6A7C", margin: "0 0 16px" }}>Takes under 10 seconds. Rate each from 1–5.</p>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: "0 0 16px" }}>Takes under 10 seconds. Rate each from 1–5.</p>
         </div>
 
         {/* Scrollable content */}
@@ -96,7 +96,7 @@ export default function SymptomTracker({ onClose }) {
               <div key={item.key}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                   <span style={{ color: item.color }}>{item.icon}</span>
-                  <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A24", margin: 0 }}>{item.label}</p>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{item.label}</p>
                   <span style={{ marginLeft: "auto", fontSize: 20 }}>{EMOJIS[scores[item.key] - 1]}</span>
                 </div>
                 {/* Horizontally scrollable rating row */}
@@ -114,12 +114,12 @@ export default function SymptomTracker({ onClose }) {
                         height: 44,
                         borderRadius: 10,
                         border: "none",
-                        background: scores[item.key] >= val ? item.color : "#F8F7FF",
+                        background: scores[item.key] >= val ? item.color : "var(--bg-card)",
                         cursor: "pointer",
                         transition: "background 0.2s",
                         opacity: scores[item.key] >= val ? 1 : 0.3,
                       }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: scores[item.key] >= val ? "#fff" : "#A09FAD" }}>{val}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: scores[item.key] >= val ? "#fff" : "var(--text-muted)" }}>{val}</span>
                     </motion.button>
                   ))}
                 </div>

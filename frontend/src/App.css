@@ -1,3 +1,72 @@
+/* ── Flourish Design Tokens ───────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-app:       #ffffff;
+  --bg-card:      #F8F7FF;
+  --bg-elevated:  #ffffff;
+
+  /* Borders */
+  --border:       #E8E6FF;
+
+  /* Text */
+  --text-primary:   #1A1A24;
+  --text-secondary: #6B6A7C;
+  --text-muted:     #A09FAD;
+
+  /* Nav / headers */
+  --nav-bg:         rgba(255,255,255,0.97);
+  --header-bg:      linear-gradient(180deg, #F8F7FF 0%, #fff 100%);
+  --header-sticky:  rgba(255,255,255,0.92);
+
+  /* Overlays */
+  --overlay-white:  rgba(255,255,255,0.8);
+  --lock-overlay:   rgba(248,247,255,0.9);
+
+  /* Inputs */
+  --input-bg:    #F8F7FF;
+  --input-text:  #1A1A24;
+
+  /* Misc */
+  --scrollbar-bg: transparent;
+}
+
+[data-theme="dark"] {
+  --bg-app:       #0F0F16;
+  --bg-card:      #1C1C2A;
+  --bg-elevated:  #252535;
+
+  --border:       #2E2E42;
+
+  --text-primary:   #EEEDF8;
+  --text-secondary: #9896AB;
+  --text-muted:     #6A6878;
+
+  --nav-bg:         rgba(12,12,18,0.97);
+  --header-bg:      linear-gradient(180deg, #1C1C2A 0%, #0F0F16 100%);
+  --header-sticky:  rgba(12,12,18,0.95);
+
+  --overlay-white:  rgba(26,26,40,0.88);
+  --lock-overlay:   rgba(20,20,32,0.92);
+
+  --input-bg:    #1C1C2A;
+  --input-text:  #EEEDF8;
+}
+
+/* ── Smooth theme colour transitions ──────────────────────────────────────── */
+/* Only transitions colour properties — does NOT affect Framer Motion
+   transform / opacity / scale animations which operate independently. */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.22s;
+  transition-timing-function: ease;
+}
+/* Disable transitions on elements with Framer Motion entrance/exit so they
+   don't "fade out" colours while sliding in */
+[data-framer-motion-will-change] {
+  transition: none !important;
+}
+
+/* ── Global resets ────────────────────────────────────────────────────────── */
 * {
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
@@ -5,21 +74,20 @@
 }
 
 html {
-  /* Prevent horizontal overflow on mobile */
   overflow-x: hidden;
   width: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", sans-serif;
-  background: #ffffff;
-  color: #1A1A24;
+  background: var(--bg-app);
+  color: var(--text-primary);
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
   width: 100%;
-  /* Account for iOS safe areas */
   padding-top: env(safe-area-inset-top, 0px);
 }
 
@@ -30,36 +98,32 @@ body {
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; -ms-overflow-style: none; }
 
-/* Smooth scroll */
-html { scroll-behavior: smooth; }
-
 /* Mobile momentum scroll */
 .scroll-container {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Prevent iOS input zoom - min font-size 16px on inputs */
+/* Prevent iOS input zoom */
 input, textarea, select {
   font-size: 16px !important;
   font-family: inherit;
 }
-
 button { font-family: inherit; }
 
 /* Loading spinner */
 @keyframes spin {
   from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  to   { transform: rotate(360deg); }
 }
 .loading-spinner {
   animation: spin 0.75s linear infinite;
 }
 
-/* Slide up animation */
+/* Slide up */
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(0); opacity: 1; }
 }
 
 /* Focus states */
@@ -69,8 +133,8 @@ input:focus, textarea:focus {
   outline: none !important;
 }
 
-/* Safe area for notch phones */
-.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+/* Safe area helpers */
+.safe-top    { padding-top:    env(safe-area-inset-top,    0px); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
 /* Touch targets */

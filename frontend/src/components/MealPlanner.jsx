@@ -44,28 +44,28 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
         initial={{ y: "100%" }}
         animate={{ y: 0, transition: { type: "spring", damping: 28, stiffness: 300 } }}
         exit={{ y: "100%" }}
-        style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "#fff", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", maxHeight: "85vh", overflowY: "auto" }}>
+        style={{ width: "100%", maxWidth: 480, margin: "0 auto", background: "var(--bg-elevated)", borderRadius: "24px 24px 0 0", padding: "24px 20px 40px", maxHeight: "85vh", overflowY: "auto" }}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1A1A24", margin: 0 }}>Your meal plan</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Your meal plan</h2>
           <div style={{ display: "flex", gap: 8 }}>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={fetchPlan} style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={fetchPlan} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <RefreshCw size={16} color="#534AB7" />
             </motion.button>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={onClose} style={{ background: "#F8F7FF", border: "1px solid #E8E6FF", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={onClose} style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <X size={16} color="#534AB7" />
             </motion.button>
           </div>
         </div>
 
-        <p style={{ fontSize: 14, color: "#6B6A7C", marginBottom: 20 }}>All meals are green-rated and personalised for your conditions.</p>
+        <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 20 }}>All meals are green-rated and personalised for your conditions.</p>
 
         {loading ? (
           <div style={{ textAlign: "center", padding: 40 }}>
             <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
               <RefreshCw size={32} color="#534AB7" />
             </motion.div>
-            <p style={{ color: "#6B6A7C", marginTop: 12 }}>Getting your personalised meal plan...</p>
+            <p style={{ color: "var(--text-secondary)", marginTop: 12 }}>Getting your personalised meal plan...</p>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -74,7 +74,7 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
                 key={meal.key}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0, transition: { delay: i * 0.08 } }}
-                style={{ background: "#F8F7FF", borderRadius: 16, padding: 16, border: "1px solid #E8E6FF", position: "relative" }}>
+                style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", position: "relative" }}>
                 {!isPremium && meal.key !== "breakfast" && (
                   <div style={{ position: "absolute", inset: 0, background: "rgba(248,247,255,0.9)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
                     <div style={{ textAlign: "center" }}>
@@ -90,9 +90,9 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span style={{ fontSize: 32 }}>{meal.emoji}</span>
                     <div>
-                      <p style={{ fontSize: 11, color: "#6B6A7C", margin: "0 0 2px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{meal.label}</p>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#1A1A24", margin: "0 0 4px" }}>{meal.name}</p>
-                      <p style={{ fontSize: 12, color: "#6B6A7C", margin: 0 }}>{meal.description}</p>
+                      <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: "0 0 2px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{meal.label}</p>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px" }}>{meal.name}</p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{meal.description}</p>
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
