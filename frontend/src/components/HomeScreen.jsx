@@ -227,6 +227,10 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
   };
 
   const checkStreakReward = async () => {
+    const today = new Date().toISOString().split("T")[0];
+    const dismissedDate = localStorage.getItem("fl_streak_dismissed");
+    if (dismissedDate === today) return;
+
     try {
       const res = await axios.get(`${API}/streak/reward`, { headers: getHeaders(), withCredentials: true });
       if (res.data.reward) {
@@ -242,6 +246,12 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
         }
       }
     } catch (e) {}
+  };
+
+  const dismissStreakReward = () => {
+    const today = new Date().toISOString().split("T")[0];
+    localStorage.setItem("fl_streak_dismissed", today);
+    setShowReward(false);
   };
 
   const startLoading = () => {
@@ -349,7 +359,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
             animate={{ y: 0, transition: { type: "spring", stiffness: 400, damping: 25 } }}
             exit={{ y: -80 }}
             style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", padding: "12px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}
-            onClick={() => setShowReward(false)}>
+            onClick={dismissStreakReward}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Flame size={20} color="#fff" />
               <p style={{ color: "#fff", margin: 0, fontSize: 14, fontWeight: 600 }}>{streakReward.message}</p>
