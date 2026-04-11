@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Scan, BookOpen, BarChart2, ShoppingBag, User, Moon, Sun } from "lucide-react";
@@ -105,6 +105,7 @@ function AppContent() {
   const { isDark, toggleTheme } = useTheme();
   const [showSplash, setShowSplash] = useState(!sessionStorage.getItem("splash_shown"));
   const [activeTab, setActiveTab] = useState("scan");
+  const [pendingFoodName, setPendingFoodName] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallEntry, setPaywallEntry] = useState("default");
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
@@ -224,7 +225,7 @@ function AppContent() {
       <AnimatePresence mode="wait">
         {activeTab === "scan" && (
           <motion.div key="scan" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} onOpenPaywall={openPaywall} />
+            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} onOpenPaywall={openPaywall} pendingFoodName={pendingFoodName} onPendingFoodConsumed={() => setPendingFoodName(null)} />
           </motion.div>
         )}
         {activeTab === "diary" && (
@@ -239,7 +240,7 @@ function AppContent() {
         )}
         {activeTab === "myfoods" && (
           <motion.div key="myfoods" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <MyFoodsScreen onOpenPaywall={openPaywall} onRateFood={(name) => { setActiveTab("scan"); }} />
+            <MyFoodsScreen onOpenPaywall={openPaywall} onRateFood={(name) => { setPendingFoodName(name); setActiveTab("scan"); }} />
           </motion.div>
         )}
         {activeTab === "profile" && (

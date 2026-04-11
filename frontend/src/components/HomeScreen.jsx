@@ -145,7 +145,7 @@ const NUDGE_MESSAGES = [
   "Still guessing? For £12.99 a month, that's the most expensive thing you own.",
 ];
 
-export default function HomeScreen({ onNavigate, onOpenPaywall }) {
+export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName, onPendingFoodConsumed }) {
   const { user, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState(null);
@@ -202,6 +202,14 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
       }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-trigger rating when navigating from My Foods "Rate again"
+  useEffect(() => {
+    if (pendingFoodName) {
+      onPendingFoodConsumed && onPendingFoodConsumed();
+      rateFood(pendingFoodName);
+    }
+  }, [pendingFoodName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStats = async () => {
     try {

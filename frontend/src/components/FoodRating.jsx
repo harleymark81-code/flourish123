@@ -145,6 +145,7 @@ function ScoreCircle({ score, size = 92 }) {
 
 // Handles both 1-10 (new API) and 0-100 (legacy) dimension scores
 function getDimScoreColor(score) {
+  if (score == null || isNaN(score)) return "var(--text-muted)";
   // If score > 10, treat as 0-100 legacy
   if (score > 10) return getScoreColor(score);
   // 1-10: green 7-10, amber 4-6, red 1-3
@@ -155,9 +156,10 @@ function getDimScoreColor(score) {
 
 function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock }) {
   const [showWhy, setShowWhy] = useState(false);
-  const isNewScale = score !== undefined && score <= 10;
+  const safeScore = score ?? 0;
+  const isNewScale = score != null && safeScore <= 10;
   const color = getDimScoreColor(score);
-  const barPct = isNewScale ? (score / 10) * 100 : score;
+  const barPct = isNewScale ? (safeScore / 10) * 100 : safeScore;
 
   return (
     <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 14, border: "1px solid var(--border)", position: "relative", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
@@ -170,7 +172,7 @@ function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock
           </div>
         ) : (
           <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: "-0.02em" }}>
-            {score}{isNewScale ? "/10" : ""}
+            {score != null ? `${score}${isNewScale ? "/10" : ""}` : "—"}
           </span>
         )}
       </div>
