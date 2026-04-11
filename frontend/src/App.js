@@ -16,6 +16,7 @@ import AffiliateApplication from "./pages/AffiliateApplication";
 import AffiliateDashboard from "./pages/AffiliateDashboard";
 import InsightsScreen from "./components/InsightsScreen";
 import MyFoodsScreen from "./components/MyFoodsScreen";
+import ResetPassword from "./components/ResetPassword";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -180,6 +181,7 @@ function AppContent() {
   if (location.pathname === "/admin") return <AdminDashboard />;
   if (location.pathname === "/affiliate") return <AffiliateApplication />;
   if (location.pathname === "/affiliate/dashboard") return <AffiliateDashboard />;
+  if (location.pathname === "/reset-password") return <ResetPassword />;
 
   const params = new URLSearchParams(window.location.search);
   if (params.get("session_id") && params.get("success") === "true") return <StripeReturn />;

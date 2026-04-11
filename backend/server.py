@@ -23,6 +23,8 @@ import stripe as stripe_lib
 from datetime import datetime, timezone, timedelta
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # ── Anthropic helper with retry ────────────────────────────────────────────────
 ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
@@ -68,9 +70,76 @@ async def call_anthropic(system: str, user_msg: str) -> str:
             raise ValueError(f"Anthropic API error {resp.status_code}: {error_body}")
         return resp.json()["content"][0]["text"]
 
+# ── EmailJS helper ────────────────────────────────────────────────────────────
+async def send_emailjs_email(template_id: str, template_params: dict) -> bool:
+    """Send an email via EmailJS REST API. Returns True on success."""
+    service_id = os.environ.get("EMAILJS_SERVICE_ID", "")
+    public_key  = os.environ.get("EMAILJS_PUBLIC_KEY", "")
+    if not service_id or not template_id or not public_key:
+        logging.getLogger(__name__).warning("EmailJS env vars not set — email not sent")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.emailjs.com/api/v1.0/email/send",
+                json={
+                    "service_id":      service_id,
+                    "template_id":     template_id,
+                    "user_id":         public_key,
+                    "template_params": template_params,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            return resp.status_code == 200
+    except Exception as e:
+        logging.getLogger(__name__).error(f"EmailJS error: {e}")
+        return False
+
+# ── Weekly report cron task ───────────────────────────────────────────────────
+async def _send_weekly_reports():
+    """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ scans."""
+    logger_w = logging.getLogger(__name__)
+    template_id = os.environ.get("EMAILJS_WEEKLY_TEMPLATE_ID", "")
+    if not template_id:
+        logger_w.info("EMAILJS_WEEKLY_TEMPLATE_ID not set — skipping weekly reports")
+        return
+
+    seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+    users = await db.users.find(
+        {"email": {"$exists": True}, "role": {"$ne": "admin"}},
+        {"_id": 1, "email": 1, "name": 1}
+    ).to_list(10000)
+
+    sent = 0
+    for user in users:
+        uid = str(user["_id"])
+        entries = await db.diary.find(
+            {"user_id": uid, "date": {"$gte": seven_days_ago}},
+            {"food_name": 1, "overall_score": 1}
+        ).to_list(200)
+        if len(entries) < 3:
+            continue
+        avg_score   = round(sum(e.get("overall_score", 0) for e in entries) / len(entries))
+        green_foods = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) >= 70))[:3]
+        red_foods   = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) < 40))[:3]
+        ok = await send_emailjs_email(template_id, {
+            "to_email":    user["email"],
+            "user_name":   user.get("name", "there"),
+            "total_scans": str(len(entries)),
+            "avg_score":   str(avg_score),
+            "top_green":   ", ".join(green_foods) if green_foods else "Keep logging to see your best foods",
+            "top_red":     ", ".join(red_foods)   if red_foods   else "None this week",
+        })
+        if ok:
+            sent += 1
+    logger_w.info(f"Weekly reports: sent {sent}/{len(users)} emails")
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# ── Scheduler ─────────────────────────────────────────────────────────────────
+_scheduler = AsyncIOScheduler()
 
 # ── DB ───────────────────────────────────────────────────────────────────────
 mongo_url = os.environ['MONGO_URL']
@@ -106,6 +175,17 @@ async def lifespan(app: FastAPI):
     await db.favourites.create_index([("user_id", 1), ("food_name", 1)])
     await db.shopping_list.create_index("user_id")
     await db.cycle_logs.create_index([("user_id", 1), ("period_start", -1)])
+    await db.barcode_cache.create_index("barcode", unique=True)
+    await db.barcode_cache.create_index("cached_at", expireAfterSeconds=86400)
+
+    # ── Weekly report cron ──
+    _scheduler.add_job(
+        _send_weekly_reports,
+        CronTrigger(day_of_week="sun", hour=9, minute=0, timezone="UTC"),
+        id="weekly_reports",
+        replace_existing=True,
+    )
+    _scheduler.start()
 
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@flourish.app")
     admin_password = os.environ.get("ADMIN_PASSWORD")
@@ -136,6 +216,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ──
+    _scheduler.shutdown(wait=False)
     client.close()
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -540,6 +621,21 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
         if today_count >= daily_limit:
             raise HTTPException(status_code=429, detail=f"Daily limit of {daily_limit} ratings reached. Upgrade to Premium for unlimited ratings.")
 
+    # ── 24h barcode cache check ────────────────────────────────────────────────
+    if data.barcode:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        cached = await db.barcode_cache.find_one({"barcode": data.barcode})
+        if cached and cached.get("cached_at") and cached["cached_at"] > cutoff:
+            result = dict(cached["rating_data"])
+            result["product_image"] = data.product_image or cached["rating_data"].get("product_image", "")
+            result["rated_at"] = datetime.now(timezone.utc).isoformat()
+            result["user_id"] = uid
+            result["date"] = today
+            result["id"] = str(uuid.uuid4())
+            result["from_cache"] = True
+            logger.info(f"Barcode cache hit: {data.barcode}")
+            return result
+
     conditions = current_user.get("conditions", [])
     goals = current_user.get("goals", [])
     managing_duration = current_user.get("managing_duration", "")
@@ -607,6 +703,21 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
         rating_data["user_id"] = uid
         rating_data["date"] = today
         rating_data["id"] = str(uuid.uuid4())
+
+        # ── Store in barcode cache ─────────────────────────────────────────────
+        if data.barcode:
+            try:
+                await db.barcode_cache.update_one(
+                    {"barcode": data.barcode},
+                    {"$set": {
+                        "barcode": data.barcode,
+                        "rating_data": {k: v for k, v in rating_data.items() if k not in ("user_id", "date", "rated_at", "id")},
+                        "cached_at": datetime.now(timezone.utc),
+                    }},
+                    upsert=True
+                )
+            except Exception as ce:
+                logger.warning(f"Barcode cache write error: {ce}")
 
         return rating_data
 
@@ -1575,8 +1686,17 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             {"email": email},
             {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
         )
-        logger.info(f"Password reset requested for {email}, token: {token}")
-        # In production this would send an email — for now log it
+        reset_link = f"https://theflourishapp.netlify.app/reset-password?token={token}"
+        template_id = os.environ.get("EMAILJS_RESET_TEMPLATE_ID", "")
+        ok = await send_emailjs_email(template_id, {
+            "to_email":   email,
+            "user_name":  user.get("name", "there"),
+            "reset_link": reset_link,
+        })
+        if not ok:
+            logger.warning(f"Password reset email failed for {email} — reset link: {reset_link}")
+        else:
+            logger.info(f"Password reset email sent to {email}")
     return {"success": True, "message": "If an account exists with this email, a reset link has been sent."}
 
 @api_router.post("/auth/reset-password")

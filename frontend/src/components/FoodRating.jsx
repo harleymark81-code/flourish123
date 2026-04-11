@@ -224,7 +224,7 @@ function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock
   );
 }
 
-export default function FoodRating({ rating, onBack, onOpenPaywall }) {
+export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }) {
   const { user, getHeaders, API } = useAuth();
   const [logged, setLogged] = useState(false);
   const [particles, setParticles] = useState([]);
@@ -473,6 +473,52 @@ export default function FoodRating({ rating, onBack, onOpenPaywall }) {
             );
           })}
         </div>
+
+        {/* Try These Instead — shown when any dimension scores ≤ 5 */}
+        {(() => {
+          const dims = rating.dimensions || {};
+          const scores = [dims.naturalness?.score, dims.hormonalImpact?.score, dims.inflammation?.score, dims.gutHealth?.score].filter(s => s != null);
+          const hasLowScore = scores.some(s => s <= 5);
+          if (!hasLowScore || !rating.alternatives?.length) return null;
+          return (
+            <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, marginBottom: 20, border: "1px solid rgba(163,45,45,0.15)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <span style={{ fontSize: 18 }}>⚠️</span>
+                <p style={{ fontSize: 15, fontWeight: 800, color: "#A32D2D", margin: 0 }}>Try These Instead</p>
+              </div>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px", lineHeight: 1.5 }}>
+                This food scored low on one or more health dimensions. These alternatives may suit you better:
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {rating.alternatives.slice(0, 3).map((alt, i) => (
+                  <motion.button
+                    key={i}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => onRateFood ? onRateFood(alt.name) : null}
+                    style={{
+                      background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      cursor: onRateFood ? "pointer" : "default", width: "100%", textAlign: "left",
+                      boxShadow: "0 1px 8px rgba(83,74,183,0.06)"
+                    }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22 }}>🥗</span>
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{alt.name}</p>
+                        {onRateFood && (
+                          <p style={{ fontSize: 11, color: "#534AB7", fontWeight: 600, margin: "2px 0 0" }}>Tap to rate this food →</p>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: getScoreColor(alt.predictedScore), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 11 }}>{alt.predictedScore}</span>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Alternatives */}
         <p style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)", marginBottom: 10, letterSpacing: "-0.02em" }}>Better alternatives for you</p>

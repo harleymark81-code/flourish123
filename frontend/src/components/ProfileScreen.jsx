@@ -1,8 +1,201 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle } from "lucide-react";
+import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, CalendarDays, ChevronDown } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+
+const PHASE_INFO = {
+  menstrual:  { label: "Menstrual",  color: "#A32D2D", bg: "rgba(163,45,45,0.08)",  emoji: "🌑", tip: "Rest and nourish. Iron-rich foods like lentils and leafy greens support you now." },
+  follicular: { label: "Follicular", color: "#534AB7", bg: "rgba(83,74,183,0.08)",  emoji: "🌱", tip: "Energy is rising. Lean proteins and fermented foods support hormone building." },
+  ovulation:  { label: "Ovulation",  color: "#639922", bg: "rgba(99,153,34,0.08)",  emoji: "🌕", tip: "Peak energy. Anti-inflammatory foods like berries and seeds support egg health." },
+  luteal:     { label: "Luteal",     color: "#BA7517", bg: "rgba(186,117,23,0.08)", emoji: "🌗", tip: "Cravings may spike. Magnesium-rich foods like dark chocolate and nuts help." },
+};
+
+function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
+  const [cycleData, setCycleData] = useState(null);
+  const [showLog, setShowLog] = useState(false);
+  const [periodDate, setPeriodDate] = useState("");
+  const [cycleLength, setCycleLength] = useState(28);
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    loadCycle();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadCycle = async () => {
+    try {
+      const res = await axios.get(`${API}/cycle/current`, { headers: getHeaders(), withCredentials: true });
+      if (res.data?.phase) setCycleData(res.data);
+    } catch (e) {}
+  };
+
+  const handleLogPeriod = async () => {
+    if (!periodDate) return;
+    setSaving(true);
+    try {
+      await axios.post(`${API}/cycle/log`, { period_start: periodDate, period_length: cycleLength }, { headers: getHeaders(), withCredentials: true });
+      setShowLog(false);
+      await loadCycle();
+    } catch (e) {
+      console.error("[Flourish] cycle log error:", e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const phase = cycleData?.phase ? PHASE_INFO[cycleData.phase] : null;
+
+  if (!cycleEnabled) {
+    return (
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+        <CalendarDays size={20} color="#534AB7" />
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 2px" }}>Cycle Tracking</p>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>Enable in your profile to track phases and get phase-specific food advice.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Build a mini 28-cell cycle calendar
+  const totalDays = cycleData?.cycle_length || 28;
+  const currentDay = cycleData?.day || 0;
+  const getPhaseForDay = (d) => {
+    if (d <= 5) return "menstrual";
+    if (d <= 13) return "follicular";
+    if (d <= 16) return "ovulation";
+    return "luteal";
+  };
+
+  return (
+    <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)" }}>
+      {/* Header — tappable to expand */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <CalendarDays size={18} color="#534AB7" />
+          <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Cycle Tracking</p>
+          {phase && (
+            <span style={{ background: phase.bg, color: phase.color, fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20 }}>{phase.emoji} {phase.label}</span>
+          )}
+        </div>
+        <ChevronDown size={16} color="#6B6A7C" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            style={{ overflow: "hidden" }}>
+            <div style={{ paddingTop: 16 }}>
+              {/* Phase info card */}
+              {phase ? (
+                <div style={{ background: phase.bg, borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: `1px solid ${phase.color}30` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: phase.color, margin: 0 }}>Day {cycleData.day} of {totalDays}</p>
+                    {cycleData.next_period && (
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>
+                        Next period: {new Date(cycleData.next_period).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </p>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>{phase.tip}</p>
+                </div>
+              ) : (
+                <div style={{ background: "var(--bg-elevated)", borderRadius: 12, padding: "12px 14px", marginBottom: 14, border: "1px solid var(--border)", textAlign: "center" }}>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Log your period start date to see your current phase and food recommendations.</p>
+                </div>
+              )}
+
+              {/* Cycle calendar */}
+              {cycleData && (
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.5, margin: "0 0 8px" }}>Cycle calendar</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {Array.from({ length: totalDays }, (_, i) => {
+                      const dayNum = i + 1;
+                      const p = getPhaseForDay(dayNum);
+                      const pInfo = PHASE_INFO[p];
+                      const isCurrent = dayNum === currentDay;
+                      return (
+                        <div key={dayNum} style={{
+                          width: 22, height: 22, borderRadius: 4,
+                          background: isCurrent ? pInfo.color : pInfo.bg,
+                          border: `1px solid ${pInfo.color}${isCurrent ? "ff" : "40"}`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          {isCurrent && <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff" }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Legend */}
+                  <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                    {Object.entries(PHASE_INFO).map(([k, v]) => (
+                      <div key={k} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: 2, background: v.bg, border: `1px solid ${v.color}` }} />
+                        <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>{v.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Log period button */}
+              {!showLog ? (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => setShowLog(true)}
+                  style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                  {cycleData ? "Log new period" : "Log period start"}
+                </motion.button>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 4px" }}>Period start date</p>
+                    <input
+                      type="date"
+                      value={periodDate}
+                      max={new Date().toISOString().split("T")[0]}
+                      onChange={e => setPeriodDate(e.target.value)}
+                      style={{ width: "100%", background: "var(--input-bg)", border: "2px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontSize: 14, outline: "none", color: "var(--input-text)", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 4px" }}>Cycle length (days)</p>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[25, 26, 27, 28, 29, 30, 31, 32].map(d => (
+                        <button key={d} onClick={() => setCycleLength(d)}
+                          style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: cycleLength === d ? "#534AB7" : "var(--bg-elevated)", color: cycleLength === d ? "#fff" : "var(--text-secondary)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setShowLog(false)}
+                      style={{ flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, padding: "11px", fontSize: 14, cursor: "pointer", color: "var(--text-secondary)" }}>
+                      Cancel
+                    </button>
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={handleLogPeriod} disabled={!periodDate || saving}
+                      style={{ flex: 2, background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 600, cursor: "pointer", opacity: !periodDate ? 0.6 : 1 }}>
+                      {saving ? "Saving..." : "Save"}
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const { user, logout, getHeaders, API } = useAuth();
@@ -200,6 +393,9 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
             </motion.button>
           </div>
         )}
+
+        {/* Cycle Tracking */}
+        <CycleTrackingCard getHeaders={getHeaders} API={API} cycleEnabled={user?.cycle_tracking} />
 
         {/* Affiliate Link */}
         <motion.div whileTap={{ scale: 0.97 }} onClick={() => window.location.href = "/affiliate"}

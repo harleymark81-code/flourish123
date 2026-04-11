@@ -360,6 +360,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       rating={currentRating}
       onBack={() => { setCurrentRating(null); loadRecentRatings(); loadStats(); }}
       onOpenPaywall={() => handleOpenPaywall()}
+      onRateFood={(name) => { setCurrentRating(null); rateFood(name); }}
     />;
   }
 
