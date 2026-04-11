@@ -390,10 +390,10 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
         {/* Health dimensions */}
         <p style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.02em" }}>Health dimensions</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-          {/* Free: naturalness + hormonal in full */}
+          {/* Free: naturalness only in full; hormonal/inflammation/gut locked */}
           <DimensionCard label="Naturalness" score={rating.dimensions?.naturalness?.score} summary={rating.dimensions?.naturalness?.summary} why={rating.dimensions?.naturalness?.why} locked={false} />
-          <DimensionCard label="Hormonal" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} why={rating.dimensions?.hormonalImpact?.why} locked={false} />
-          {/* Free: inflammation + gut = pixelated */}
+          <DimensionCard label="Hormonal" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} why={rating.dimensions?.hormonalImpact?.why}
+            locked={false} pixelated={!isPremium} onUnlock={() => onOpenPaywall("hormonal")} />
           <DimensionCard label="Inflammation" score={rating.dimensions?.inflammation?.score} summary={rating.dimensions?.inflammation?.summary} why={rating.dimensions?.inflammation?.why}
             locked={false} pixelated={!isPremium} onUnlock={() => onOpenPaywall("inflammation")} />
           <DimensionCard label="Gut Health" score={rating.dimensions?.gutHealth?.score} summary={rating.dimensions?.gutHealth?.summary} why={rating.dimensions?.gutHealth?.why}
@@ -474,12 +474,41 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
           })}
         </div>
 
-        {/* Try These Instead — shown when any dimension scores ≤ 5 */}
+        {/* Try These Instead — premium only; shown when any dimension scores ≤ 5 */}
         {(() => {
           const dims = rating.dimensions || {};
           const scores = [dims.naturalness?.score, dims.hormonalImpact?.score, dims.inflammation?.score, dims.gutHealth?.score].filter(s => s != null);
           const hasLowScore = scores.some(s => s <= 5);
           if (!hasLowScore || !rating.alternatives?.length) return null;
+          if (!isPremium) {
+            // Blurred teaser for free users
+            return (
+              <div style={{ position: "relative", borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+                <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, border: "1px solid rgba(163,45,45,0.15)", filter: "blur(3px)", userSelect: "none", pointerEvents: "none" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 18 }}>⚠️</span>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: "#A32D2D", margin: 0 }}>Try These Instead</p>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {rating.alternatives.slice(0, 2).map((alt, i) => (
+                      <div key={i} style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 22 }}>🥗</span>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{alt.name}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(var(--bg-elevated-rgb, 255,255,255),0.6)", backdropFilter: "blur(2px)", borderRadius: 16, padding: 16, textAlign: "center" }}>
+                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 4px" }}>Swap suggestions are Premium</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.4 }}>See personalised swaps tailored to your conditions.</p>
+                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => onOpenPaywall("swaps")}
+                    style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(83,74,183,0.3)" }}>
+                    Unlock swap suggestions
+                  </motion.button>
+                </div>
+              </div>
+            );
+          }
           return (
             <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, marginBottom: 20, border: "1px solid rgba(163,45,45,0.15)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>

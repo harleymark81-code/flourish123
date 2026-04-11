@@ -24,6 +24,7 @@ function ScoreDot({ score }) {
 
 export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
   const { user, getHeaders, API } = useAuth();
+  const isPremium = user?.is_premium;
   const [activeTab, setActiveTab] = useState("favourites");
   const [favourites, setFavourites] = useState([]);
   const [history, setHistory] = useState([]);
@@ -125,6 +126,7 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
   };
 
   const addFavToShopList = async (foodName) => {
+    if (!isPremium) { onOpenPaywall("shopping_list"); return; }
     try {
       const res = await axios.post(`${API}/shopping-list/add`, { name: foodName, source: "favourites" }, { headers: getHeaders(), withCredentials: true });
       setShoppingList(prev => [...prev, res.data.item]);
@@ -188,7 +190,9 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 4px" }}>{favourites.length} saved food{favourites.length !== 1 ? "s" : ""}</p>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 4px" }}>
+                    {isPremium ? `${favourites.length} saved food${favourites.length !== 1 ? "s" : ""}` : `${favourites.length} of 3 free favourites used`}
+                  </p>
                   {favourites.map(fav => {
                     const score = fav.rating_data?.overallScore ?? fav.rating_data?.overall_score ?? null;
                     return (
@@ -221,6 +225,12 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                       </div>
                     );
                   })}
+                  {!isPremium && favourites.length >= 3 && (
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={() => onOpenPaywall("favourites")}
+                      style={{ background: "rgba(83,74,183,0.08)", border: "1px dashed #534AB7", borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: "#534AB7", fontWeight: 700, fontSize: 13 }}>
+                      🔒 Unlock unlimited favourites with Premium
+                    </motion.button>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -251,7 +261,9 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 4px" }}>{filteredHistory.length} item{filteredHistory.length !== 1 ? "s" : ""}</p>
+                  <p style={{ fontSize: 13, color: "var(--text-muted)", margin: "0 0 4px" }}>
+                    {isPremium ? `${filteredHistory.length} item${filteredHistory.length !== 1 ? "s" : ""}` : `Last ${filteredHistory.length} scans (free)`}
+                  </p>
                   {filteredHistory.map((entry, i) => (
                     <div key={entry.id || i} style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
                       <ScoreDot score={entry.overall_score || 0} />
@@ -267,6 +279,12 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                       </motion.button>
                     </div>
                   ))}
+                  {!isPremium && (
+                    <motion.button whileTap={{ scale: 0.97 }} onClick={() => onOpenPaywall("history")}
+                      style={{ background: "rgba(83,74,183,0.08)", border: "1px dashed #534AB7", borderRadius: 12, padding: "13px 16px", cursor: "pointer", color: "#534AB7", fontWeight: 700, fontSize: 13, marginTop: 4 }}>
+                      🔒 Unlock full history with Premium
+                    </motion.button>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -275,6 +293,20 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
           {/* ── SHOPPING LIST ── */}
           {activeTab === "shopping" && (
             <motion.div key="shopping" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+              {!isPremium ? (
+                <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                  <div style={{ fontSize: 48, marginBottom: 16 }}>🛒</div>
+                  <h3 style={{ color: "var(--text-primary)", fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Shopping List is Premium</h3>
+                  <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.5, margin: "0 0 24px" }}>
+                    Build a personalised shopping list of foods that work for your condition. Save items from your favourites or add them manually.
+                  </p>
+                  <motion.button whileTap={{ scale: 0.96 }} onClick={() => onOpenPaywall("shopping_list")}
+                    style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 14, padding: "14px 28px", fontWeight: 700, fontSize: 15, cursor: "pointer", boxShadow: "0 4px 16px rgba(83,74,183,0.25)" }}>
+                    Unlock Shopping List
+                  </motion.button>
+                </div>
+              ) : (
+              <>
               {/* Add item */}
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                 <input
@@ -364,6 +396,8 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                     ))}
                   </div>
                 </>
+              )}
+              </>
               )}
             </motion.div>
           )}

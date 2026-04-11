@@ -118,6 +118,59 @@ export default function InsightsScreen({ onOpenPaywall }) {
     { id: "patterns", label: "Patterns" },
   ];
 
+  // Free users see a gated preview screen
+  if (!isPremium) {
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 90 }}>
+        <div style={{ background: "var(--bg-card)", padding: "52px 20px 16px", borderBottom: "1px solid var(--border)" }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Insights</h1>
+        </div>
+        <div style={{ position: "relative", padding: "16px 20px" }}>
+          {/* Blurred preview of what premium looks like */}
+          <div style={{ filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
+            <div style={{ background: "linear-gradient(135deg, #F97316, #EA580C)", borderRadius: 16, padding: 20, marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ fontSize: 44 }}>🔥</div>
+              <div>
+                <p style={{ color: "#fff", fontSize: 13, fontWeight: 600, margin: "0 0 2px" }}>Current streak</p>
+                <p style={{ color: "#fff", fontSize: 32, fontWeight: 800, margin: 0 }}>7 days</p>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", textAlign: "center" }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: "#534AB7", margin: 0 }}>24</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 0" }}>Foods rated</p>
+              </div>
+              <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 16, border: "1px solid var(--border)", textAlign: "center" }}>
+                <p style={{ fontSize: 28, fontWeight: 700, color: "#639922", margin: 0 }}>12</p>
+                <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "4px 0 0" }}>Check-ins</p>
+              </div>
+            </div>
+            <div style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 12px" }}>This week at a glance</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div style={{ textAlign: "center" }}><p style={{ color: "#fff", fontSize: 24, fontWeight: 700, margin: 0 }}>8</p><p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, margin: 0 }}>Foods rated</p></div>
+                <div style={{ textAlign: "center" }}><p style={{ color: "#fff", fontSize: 24, fontWeight: 700, margin: 0 }}>74</p><p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, margin: 0 }}>Avg score</p></div>
+                <div style={{ textAlign: "center" }}><p style={{ color: "#fff", fontSize: 24, fontWeight: 700, margin: 0 }}>5</p><p style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, margin: 0 }}>Days logged</p></div>
+              </div>
+            </div>
+          </div>
+          {/* Upgrade overlay */}
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center" }}>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>📊</div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 8px", letterSpacing: "-0.02em" }}>Insights is Premium</h2>
+            <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.55, margin: "0 0 24px" }}>
+              Track your streaks, weekly food scores, symptom patterns, and personalised badges — all in one place.
+            </p>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => onOpenPaywall("insights")}
+              style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", color: "#fff", border: "none", borderRadius: 14, padding: "16px 32px", fontWeight: 800, fontSize: 16, cursor: "pointer", boxShadow: "0 4px 20px rgba(83,74,183,0.3)", width: "100%", maxWidth: 280 }}>
+              Unlock Insights
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 90 }}>
       {/* Header */}

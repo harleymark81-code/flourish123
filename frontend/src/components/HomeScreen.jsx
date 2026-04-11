@@ -650,7 +650,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.17, type: "spring" }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => setShowSymptoms(true)}
+          onClick={() => user?.is_premium ? setShowSymptoms(true) : onOpenPaywall("symptoms")}
           style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
           <Heart size={16} color="#534AB7" />
           <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
