@@ -99,9 +99,9 @@ async def send_emailjs_email(template_id: str, template_params: dict) -> bool:
 async def _send_weekly_reports():
     """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ scans."""
     logger_w = logging.getLogger(__name__)
-    template_id = os.environ.get("EMAILJS_WEEKLY_TEMPLATE_ID", "")
+    template_id = os.environ.get("EMAILJS_TEMPLATE_ID", "")
     if not template_id:
-        logger_w.info("EMAILJS_WEEKLY_TEMPLATE_ID not set — skipping weekly reports")
+        logger_w.info("EMAILJS_TEMPLATE_ID not set — skipping weekly reports")
         return
 
     seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
@@ -122,13 +122,17 @@ async def _send_weekly_reports():
         avg_score   = round(sum(e.get("overall_score", 0) for e in entries) / len(entries))
         green_foods = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) >= 70))[:3]
         red_foods   = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) < 40))[:3]
+        message = (
+            f"Your Flourish Weekly Report\n\n"
+            f"Scans this week: {len(entries)}\n"
+            f"Average food score: {avg_score}/100\n\n"
+            f"Best foods this week: {', '.join(green_foods) if green_foods else 'Keep logging to see your top foods'}\n"
+            f"Foods to watch: {', '.join(red_foods) if red_foods else 'None this week — great work!'}\n\n"
+            f"Keep logging to build a clearer picture of how food affects your health."
+        )
         ok = await send_emailjs_email(template_id, {
-            "to_email":    user["email"],
-            "user_name":   user.get("name", "there"),
-            "total_scans": str(len(entries)),
-            "avg_score":   str(avg_score),
-            "top_green":   ", ".join(green_foods) if green_foods else "Keep logging to see your best foods",
-            "top_red":     ", ".join(red_foods)   if red_foods   else "None this week",
+            "to_email": user["email"],
+            "message":  message,
         })
         if ok:
             sent += 1
@@ -1687,11 +1691,10 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
         )
         reset_link = f"https://theflourishapp.netlify.app/reset-password?token={token}"
-        template_id = os.environ.get("EMAILJS_RESET_TEMPLATE_ID", "")
+        template_id = os.environ.get("EMAILJS_TEMPLATE_ID", "")
         ok = await send_emailjs_email(template_id, {
-            "to_email":   email,
-            "user_name":  user.get("name", "there"),
-            "reset_link": reset_link,
+            "to_email": email,
+            "message":  f"Hi {user.get('name', 'there')},\n\nClick the link below to reset your Flourish password. This link expires in 2 hours.\n\n{reset_link}\n\nIf you didn't request this, you can safely ignore this email.",
         })
         if not ok:
             logger.warning(f"Password reset email failed for {email} — reset link: {reset_link}")
