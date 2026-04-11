@@ -167,6 +167,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     name: Optional[str] = ""
+    referred_by: Optional[str] = None  # affiliate or user referral code
 
 class LoginRequest(BaseModel):
     email: str
@@ -296,7 +297,7 @@ async def register(data: RegisterRequest, response: JSONResponse = None):
         "premium_plan": None,
         "premium_expires_at": None,
         "referral_code": str(uuid.uuid4())[:8].upper(),
-        "referred_by": None,
+        "referred_by": data.referred_by or None,
         "streak": 0,
         "longest_streak": 0,
         "last_active_date": None,
@@ -307,7 +308,14 @@ async def register(data: RegisterRequest, response: JSONResponse = None):
     result = await db.users.insert_one(user_doc)
     user_doc["_id"] = str(result.inserted_id)
     user_doc.pop("password_hash", None)
-    
+
+    # If registered via an affiliate link, increment their signup counter
+    if data.referred_by:
+        await db.affiliate_applications.update_one(
+            {"affiliate_code": data.referred_by},
+            {"$inc": {"signups": 1}}
+        )
+
     token = create_access_token(str(result.inserted_id), email)
     resp = JR(content={"user": user_doc, "token": token})
     resp.set_cookie("access_token", token, httponly=True, secure=False, samesite="lax", max_age=86400*30)
@@ -765,6 +773,8 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
     success_url = f"{origin}/?success=true&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin}/?cancelled=true"
     
+    referral_code = current_user.get("referred_by", "") or ""
+
     try:
         session = stripe_lib.checkout.Session.create(
             mode="subscription",
@@ -773,9 +783,10 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
             subscription_data={"trial_period_days": 3},
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={"user_id": uid, "email": current_user.get("email", ""), "plan": data.plan}
+            customer_email=current_user.get("email", "") or None,
+            metadata={"user_id": uid, "email": current_user.get("email", ""), "plan": data.plan, "referral_code": referral_code}
         )
-        
+
         # Save pending transaction
         await db.payment_transactions.insert_one({
             "session_id": session.id,
@@ -786,6 +797,7 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
             "currency": "gbp",
             "status": "pending",
             "payment_status": "pending",
+            "referral_code": referral_code,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
@@ -842,27 +854,63 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
         logger.error(f"Payment status error: {e}")
         return {"status": "unknown", "payment_status": "unknown", "is_success": False}
 
+async def _find_uid_by_customer(customer_id: str) -> Optional[str]:
+    """Find a user_id from a Stripe customer_id stored in payment_transactions."""
+    txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
+    return txn.get("user_id") if txn else None
+
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
     body = await request.body()
     stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
-    
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+    # ── Verify Stripe signature ───────────────────────────────────────────────
+    if webhook_secret:
+        sig = request.headers.get("stripe-signature", "")
+        try:
+            event = stripe_lib.Webhook.construct_event(body, sig, webhook_secret)
+            payload = event
+        except stripe_lib.error.SignatureVerificationError as e:
+            logger.warning(f"Stripe webhook signature invalid: {e}")
+            raise HTTPException(status_code=400, detail="Invalid signature")
+    else:
+        # No secret configured — accept but log a warning (dev mode)
+        logger.warning("STRIPE_WEBHOOK_SECRET not set — skipping signature verification")
+        try:
+            payload = json.loads(body)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+
     try:
-        payload = json.loads(body)
         event_type = payload.get("type", "")
-        
+        data_obj = payload.get("data", {}).get("object", {})
+        logger.info(f"Stripe webhook received: {event_type}")
+
+        # ── checkout.session.completed ────────────────────────────────────────
         if event_type == "checkout.session.completed":
-            session = payload.get("data", {}).get("object", {})
-            session_id = session.get("id")
-            payment_status = session.get("payment_status")
-            metadata = session.get("metadata") or {}
+            session_id = data_obj.get("id")
+            payment_status = data_obj.get("payment_status")
+            metadata = data_obj.get("metadata") or {}
             user_id = metadata.get("user_id")
             plan = metadata.get("plan", "monthly")
-            
+            referral_code = metadata.get("referral_code", "")
+            customer_id = data_obj.get("customer")
+            subscription_id = data_obj.get("subscription")
+
             if session_id and (payment_status in ["paid", "no_payment_required"]):
+                update_fields = {
+                    "payment_status": "paid",
+                    "status": "complete",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+                if customer_id:
+                    update_fields["stripe_customer_id"] = customer_id
+                if subscription_id:
+                    update_fields["stripe_subscription_id"] = subscription_id
                 await db.payment_transactions.update_one(
                     {"session_id": session_id},
-                    {"$set": {"payment_status": "paid", "status": "complete", "updated_at": datetime.now(timezone.utc).isoformat()}}
+                    {"$set": update_fields}
                 )
                 if user_id:
                     try:
@@ -880,65 +928,95 @@ async def stripe_webhook(request: Request):
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
-        elif event_type == "customer.subscription.deleted":
-            subscription = payload.get("data", {}).get("object", {})
-            sub_id = subscription.get("id")
-            customer_id = subscription.get("customer")
-            # Try to find user by customer_id or by looking up the transaction
+        # ── customer.subscription.trial_will_end ──────────────────────────────
+        elif event_type == "customer.subscription.trial_will_end":
+            # Trial ends in 3 days — just log for now; email reminders are handled client-side via EmailJS
+            customer_id = data_obj.get("customer")
+            logger.info(f"Trial will end soon for Stripe customer: {customer_id}")
+
+        # ── customer.subscription.updated ─────────────────────────────────────
+        elif event_type == "customer.subscription.updated":
+            sub_status = data_obj.get("status", "")
+            customer_id = data_obj.get("customer")
+            plan_id = None
             try:
-                txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
-                uid = txn.get("user_id") if txn else None
+                plan_id = data_obj.get("items", {}).get("data", [{}])[0].get("price", {}).get("id")
+            except Exception:
+                pass
+            if customer_id:
+                uid = await _find_uid_by_customer(customer_id)
+                if uid:
+                    if sub_status == "active":
+                        is_annual = plan_id == os.environ.get("STRIPE_ANNUAL_PRICE_ID", "")
+                        days = 365 if is_annual else 30
+                        await db.users.update_one(
+                            {"_id": ObjectId(uid)},
+                            {"$set": {"is_premium": True, "premium_expires_at": (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()}}
+                        )
+                    elif sub_status in ("canceled", "unpaid", "past_due"):
+                        await db.users.update_one(
+                            {"_id": ObjectId(uid)},
+                            {"$set": {"is_premium": False}}
+                        )
+                        logger.info(f"User {uid} premium paused — sub status: {sub_status}")
+
+        # ── customer.subscription.deleted ────────────────────────────────────
+        elif event_type == "customer.subscription.deleted":
+            customer_id = data_obj.get("customer")
+            if customer_id:
+                uid = await _find_uid_by_customer(customer_id)
                 if uid:
                     await db.users.update_one(
                         {"_id": ObjectId(uid)},
                         {"$set": {"is_premium": False, "premium_expires_at": datetime.now(timezone.utc).isoformat()}}
                     )
-                    logger.info(f"User {uid} downgraded from premium via webhook (subscription deleted)")
-            except Exception as e:
-                logger.error(f"Failed to handle subscription deletion: {e}")
+                    logger.info(f"User {uid} downgraded — subscription deleted")
 
-        elif event_type == "customer.subscription.updated":
-            # Reactivate premium if subscription becomes active again
-            subscription = payload.get("data", {}).get("object", {})
-            sub_status = subscription.get("status", "")
-            customer_id = subscription.get("customer")
-            if sub_status == "active" and customer_id:
-                try:
-                    txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
-                    if not txn:
-                        # Try matching by session metadata
-                        txn = await db.payment_transactions.find_one({"payment_status": "paid", "stripe_customer_id": customer_id})
-                    uid = txn.get("user_id") if txn else None
-                    if uid:
-                        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                        await db.users.update_one(
-                            {"_id": ObjectId(uid)},
-                            {"$set": {"is_premium": True, "premium_expires_at": expires}}
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to handle subscription update: {e}")
-
+        # ── invoice.payment_succeeded ─────────────────────────────────────────
         elif event_type == "invoice.payment_succeeded":
-            # Extend premium on successful recurring payment
-            invoice = payload.get("data", {}).get("object", {})
-            customer_id = invoice.get("customer")
+            customer_id = data_obj.get("customer")
+            # Determine plan from the invoice lines
+            plan = "monthly"
+            try:
+                price_id = data_obj.get("lines", {}).get("data", [{}])[0].get("price", {}).get("id", "")
+                if price_id == os.environ.get("STRIPE_ANNUAL_PRICE_ID", ""):
+                    plan = "annual"
+            except Exception:
+                pass
             if customer_id:
-                try:
-                    txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
-                    uid = txn.get("user_id") if txn else None
-                    if uid:
-                        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                uid = await _find_uid_by_customer(customer_id)
+                if uid:
+                    days = 365 if plan == "annual" else 30
+                    expires = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+                    await db.users.update_one(
+                        {"_id": ObjectId(uid)},
+                        {"$set": {"is_premium": True, "premium_expires_at": expires}}
+                    )
+                    logger.info(f"Premium renewed for user {uid} ({plan}, +{days}d)")
+
+        # ── invoice.payment_failed ────────────────────────────────────────────
+        elif event_type == "invoice.payment_failed":
+            customer_id = data_obj.get("customer")
+            attempt_count = data_obj.get("attempt_count", 1)
+            if customer_id:
+                uid = await _find_uid_by_customer(customer_id)
+                if uid:
+                    # After 3 failed attempts Stripe will cancel the subscription automatically.
+                    # On first failure we leave premium active (grace period); on 3rd+ we revoke.
+                    if attempt_count >= 3:
                         await db.users.update_one(
                             {"_id": ObjectId(uid)},
-                            {"$set": {"is_premium": True, "premium_expires_at": expires}}
+                            {"$set": {"is_premium": False}}
                         )
-                        logger.info(f"Premium renewed for user {uid} via invoice.payment_succeeded")
-                except Exception as e:
-                    logger.error(f"Failed to handle invoice payment: {e}")
+                        logger.warning(f"User {uid} premium revoked after {attempt_count} failed payment attempts")
+                    else:
+                        logger.warning(f"Payment failed for user {uid} (attempt {attempt_count}) — keeping premium for now")
 
         return {"received": True}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
+        logger.error(f"Webhook processing error: {e}")
         return {"received": True}
 
 @api_router.post("/payments/portal")
@@ -973,22 +1051,26 @@ async def create_portal_session(current_user: dict = Depends(get_current_user)):
 # ── REFERRAL ───────────────────────────────────────────────────────────────────
 @api_router.get("/referral/stats")
 async def get_referral_stats(current_user: dict = Depends(get_current_user)):
-    uid = current_user.get("id") or current_user.get("_id")
     referral_code = current_user.get("referral_code", "")
-    
-    # Count paying referrals
-    paying_referrals = await db.payment_transactions.count_documents({
-        "referral_code": referral_code,
-        "payment_status": "paid"
+    frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.netlify.app")
+
+    # Count paying referrals by plan
+    monthly_refs = await db.payment_transactions.count_documents({
+        "referral_code": referral_code, "payment_status": "paid", "plan": "monthly"
     })
-    
+    annual_refs = await db.payment_transactions.count_documents({
+        "referral_code": referral_code, "payment_status": "paid", "plan": "annual"
+    })
+    paying_referrals = monthly_refs + annual_refs
+
     return {
         "referral_code": referral_code,
-        "referral_link": f"{os.environ.get('FRONTEND_URL', 'https://food-wellness-score.preview.emergentagent.com')}?ref={referral_code}",
+        "referral_link": f"{frontend_url}?ref={referral_code}",
         "paying_referrals": paying_referrals,
         "free_months_earned": paying_referrals,
-        "monthly_commission": round(paying_referrals * 12.99 * 0.30, 2),
-        "annual_commission": 0
+        "monthly_commission": round(monthly_refs * 12.99 * 0.30, 2),
+        "annual_commission": round(annual_refs * 79.0 * 0.30, 2),
+        "total_commission": round((monthly_refs * 12.99 + annual_refs * 79.0) * 0.30, 2)
     }
 
 # ── AFFILIATE ─────────────────────────────────────────────────────────────────
@@ -1033,9 +1115,11 @@ async def affiliate_dashboard(ref: str):
             "commission_pending": 0.0
         }
     
-    paying_subs = await db.payment_transactions.count_documents({"referral_code": ref, "payment_status": "paid"})
-    monthly_commission = round(paying_subs * 12.99 * 0.30, 2)
-    
+    monthly_subs = await db.payment_transactions.count_documents({"referral_code": ref, "payment_status": "paid", "plan": "monthly"})
+    annual_subs = await db.payment_transactions.count_documents({"referral_code": ref, "payment_status": "paid", "plan": "annual"})
+    paying_subs = monthly_subs + annual_subs
+    total_commission = round((monthly_subs * 12.99 + annual_subs * 79.0) * 0.30, 2)
+
     return {
         "name": aff.get("name", ""),
         "status": aff.get("status", "pending"),
@@ -1043,8 +1127,10 @@ async def affiliate_dashboard(ref: str):
         "clicks": aff.get("clicks", 0),
         "signups": aff.get("signups", 0),
         "paying_subscribers": paying_subs,
-        "commission_earned": monthly_commission,
-        "commission_pending": monthly_commission  # pending until payout
+        "monthly_subscribers": monthly_subs,
+        "annual_subscribers": annual_subs,
+        "commission_earned": total_commission,
+        "commission_pending": total_commission
     }
 
 @api_router.post("/affiliate/track-click")

@@ -1,27 +1,28 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Share2, TrendingUp, Users, DollarSign } from "lucide-react";
+import { Share2, TrendingUp, Users, DollarSign, Loader } from "lucide-react";
+import axios from "axios";
+
+const API = process.env.REACT_APP_BACKEND_URL + "/api";
 
 export default function AffiliateDashboard() {
   const [refCode] = useState(() => new URLSearchParams(window.location.search).get("ref") || "");
-  const [clicks] = useState(parseInt(localStorage.getItem(`aff_clicks_${refCode}`) || "0"));
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  // Track click via URL ref param
   useEffect(() => {
-    const urlRef = new URLSearchParams(window.location.search).get("ref");
-    if (urlRef) {
-      const key = `aff_clicks_${urlRef}`;
-      const current = parseInt(localStorage.getItem(key) || "0");
-      localStorage.setItem(key, String(current + 1));
-    }
-  }, []);
+    if (!refCode) { setLoading(false); return; }
 
-  const stats = [
-    { label: "Total Clicks", value: clicks, icon: <TrendingUp size={20} />, color: "#534AB7" },
-    { label: "Signups", value: 0, icon: <Users size={20} />, color: "#639922" },
-    { label: "Paying Subscribers", value: 0, icon: <DollarSign size={20} />, color: "#BA7517" },
-    { label: "Commission Earned", value: "£0.00", icon: <DollarSign size={20} />, color: "#F59E0B" },
-  ];
+    // Track click server-side
+    axios.post(`${API}/affiliate/track-click`, { ref: refCode }).catch(() => {});
+
+    // Load dashboard data from API
+    axios.get(`${API}/affiliate/dashboard?ref=${encodeURIComponent(refCode)}`)
+      .then(res => setData(res.data))
+      .catch(() => setError("Could not load dashboard. Check your affiliate link."))
+      .finally(() => setLoading(false));
+  }, [refCode]);
 
   const affiliateLink = `https://theflourishapp.netlify.app?ref=${refCode || "YOUR_CODE"}`;
 
@@ -34,11 +35,40 @@ export default function AffiliateDashboard() {
     }
   };
 
+  if (!refCode) {
+    return (
+      <div style={{ maxWidth: 480, margin: "80px auto", padding: 40, textAlign: "center" }}>
+        <p style={{ color: "#A32D2D", fontSize: 16 }}>No affiliate code found in URL. Use your unique link: <code>?ref=YOUR_CODE</code></p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+        <Loader size={28} color="#534AB7" style={{ animation: "spin 1s linear infinite" }} />
+      </div>
+    );
+  }
+
+  const stats = data ? [
+    { label: "Total Clicks", value: data.clicks, icon: <TrendingUp size={20} />, color: "#534AB7" },
+    { label: "Signups", value: data.signups, icon: <Users size={20} />, color: "#639922" },
+    { label: "Paying Subscribers", value: data.paying_subscribers, icon: <DollarSign size={20} />, color: "#BA7517" },
+    { label: "Commission Earned", value: `£${(data.commission_earned || 0).toFixed(2)}`, icon: <DollarSign size={20} />, color: "#F59E0B" },
+  ] : [];
+
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: "60px 24px 80px" }}>
       <div style={{ textAlign: "center", marginBottom: 40 }}>
         <h1 style={{ fontSize: 28, fontWeight: 700, color: "#1A1A24", marginBottom: 8 }}>Affiliate Dashboard</h1>
         <p style={{ color: "#6B6A7C" }}>Track your performance and earnings</p>
+        {data?.status === "pending" && (
+          <div style={{ background: "rgba(186,117,23,0.1)", border: "1px solid rgba(186,117,23,0.3)", borderRadius: 10, padding: "10px 16px", marginTop: 12 }}>
+            <p style={{ color: "#BA7517", fontSize: 13, margin: 0, fontWeight: 600 }}>Your application is pending approval. Commission tracking is already active.</p>
+          </div>
+        )}
+        {error && <p style={{ color: "#A32D2D", fontSize: 14, marginTop: 12 }}>{error}</p>}
       </div>
 
       {/* Link */}
@@ -56,27 +86,29 @@ export default function AffiliateDashboard() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ background: "#F8F7FF", borderRadius: 12, padding: 20, border: "1px solid #E8E6FF", textAlign: "center" }}>
-            <div style={{ color: s.color, marginBottom: 8 }}>{s.icon}</div>
-            <p style={{ fontSize: 24, fontWeight: 700, color: s.color, margin: 0 }}>{s.value}</p>
-            <p style={{ fontSize: 12, color: "#6B6A7C", margin: "4px 0 0" }}>{s.label}</p>
-          </div>
-        ))}
-      </div>
+      {data && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+          {stats.map(s => (
+            <div key={s.label} style={{ background: "#F8F7FF", borderRadius: 12, padding: 20, border: "1px solid #E8E6FF", textAlign: "center" }}>
+              <div style={{ color: s.color, marginBottom: 8 }}>{s.icon}</div>
+              <p style={{ fontSize: 24, fontWeight: 700, color: s.color, margin: 0 }}>{s.value}</p>
+              <p style={{ fontSize: 12, color: "#6B6A7C", margin: "4px 0 0" }}>{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Commission info */}
       <div style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 16, padding: 20, marginBottom: 24 }}>
         <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, margin: "0 0 8px" }}>Commission Structure</p>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: "0 0 4px" }}>Monthly subscription: 30% = £3.90 per subscriber</p>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: 0 }}>Annual subscription: 30% = £25.50 per subscriber</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: "0 0 4px" }}>Monthly subscription: 30% = £3.90 per subscriber/month</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: 0 }}>Annual subscription: 30% = £23.70 per subscriber</p>
       </div>
 
       {/* Withdraw */}
       <div style={{ background: "#F8F7FF", borderRadius: 12, padding: 16, border: "1px solid #E8E6FF", textAlign: "center" }}>
         <p style={{ fontSize: 15, fontWeight: 600, color: "#1A1A24", margin: "0 0 4px" }}>Withdraw earnings</p>
-        <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>Coming soon — manual payouts processed monthly</p>
+        <p style={{ fontSize: 13, color: "#6B6A7C", margin: 0 }}>Manual payouts processed monthly — contact us to claim</p>
       </div>
     </div>
   );

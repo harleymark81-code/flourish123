@@ -33,11 +33,30 @@ export function AuthProvider({ children }) {
   }, []);
 
   const register = async (email, password, name) => {
-    const res = await axios.post(`${API}/auth/register`, { email, password, name }, { withCredentials: true });
+    // Capture affiliate/referral code from URL at time of registration
+    const referred_by = new URLSearchParams(window.location.search).get("ref") || undefined;
+    const res = await axios.post(`${API}/auth/register`, { email, password, name, referred_by }, { withCredentials: true });
     const { user: u, token: t } = res.data;
     localStorage.setItem("flourish_token", t);
     setToken(t);
     setUser(u);
+    // Signup confirmation email
+    try {
+      const emailjs = await import("@emailjs/browser");
+      await emailjs.default.send(
+        process.env.REACT_APP_EMAILJS_SERVICE_ID,
+        process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
+        {
+          event_type: "New Signup",
+          user_email: email,
+          details: `Name: ${name || email.split("@")[0]}${referred_by ? ` | Ref: ${referred_by}` : ""}`,
+          time: new Date().toLocaleString("en-GB")
+        },
+        process.env.REACT_APP_EMAILJS_PUBLIC_KEY
+      );
+    } catch (e) {
+      console.warn("[Flourish] EmailJS signup notification failed:", e);
+    }
     return u;
   };
 
