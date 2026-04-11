@@ -102,7 +102,7 @@ export default function AffiliateDashboard() {
       <div style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 16, padding: 20, marginBottom: 24 }}>
         <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, margin: "0 0 8px" }}>Commission Structure</p>
         <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: "0 0 4px" }}>Monthly subscription: 30% = £3.90 per subscriber/month</p>
-        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: 0 }}>Annual subscription: 30% = £23.70 per subscriber</p>
+        <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, margin: 0 }}>Annual subscription: 30% = £15.00 per subscriber</p>
       </div>
 
       {/* Withdraw */}

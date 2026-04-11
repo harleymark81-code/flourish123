@@ -30,7 +30,7 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
   const isPremium = user?.is_premium;
 
   const planLabel = user?.premium_plan === "annual" ? "Annual" : "Monthly";
-  const planPrice = user?.premium_plan === "annual" ? "£79/year" : "£12.99/month";
+  const planPrice = user?.premium_plan === "annual" ? "£49.99/year" : "£12.99/month";
 
   const handleCheckout = async (plan) => {
     setLoadingCheckout(plan);
@@ -181,14 +181,14 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
                 onClick={() => handleCheckout("annual")}
                 disabled={!!loadingCheckout}
                 style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid #534AB7", borderRadius: 14, padding: "17px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", position: "relative" }}>
-                <div style={{ position: "absolute", top: -10, right: 16, background: "#F59E0B", borderRadius: 20, padding: "2px 10px" }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>SAVE 49%</span>
+                <div style={{ position: "absolute", top: -10, right: 16, background: "#534AB7", borderRadius: 20, padding: "2px 10px" }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>MOST POPULAR · SAVE 68%</span>
                 </div>
                 <div style={{ textAlign: "left" }}>
                   <p style={{ fontSize: 16, fontWeight: 800, color: "#534AB7", margin: 0 }}>
                     {loadingCheckout === "annual" ? "Loading..." : "Start free trial — Annual"}
                   </p>
-                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>£79/year · 3 days free · Cancel anytime</p>
+                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>£49.99/year · £4.17/month · 3 days free · Cancel anytime</p>
                 </div>
                 {loadingCheckout === "annual"
                   ? <Loader size={18} color="#534AB7" />

@@ -207,7 +207,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
     try {
       const res = await axios.get(`${API}/profile/stats`, { headers: getHeaders(), withCredentials: true });
       setStats(res.data);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] HomeScreen loadStats error:", e);
+    }
   };
 
   const loadDailyTip = async () => {
@@ -223,7 +225,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
     try {
       const res = await axios.get(`${API}/diary`, { headers: getHeaders(), withCredentials: true });
       setRecentRatings((res.data.entries || []).slice(0, 3));
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] HomeScreen loadRecentRatings error:", e);
+    }
   };
 
   const checkStreakReward = async () => {
@@ -245,7 +249,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall }) {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] HomeScreen checkStreakReward error:", e);
+    }
   };
 
   const dismissStreakReward = () => {

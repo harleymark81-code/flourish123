@@ -74,9 +74,8 @@ function StripeReturn() {
           attempts++;
           setTimeout(poll, 2000);
         } else {
-          // Assume success after timeout — user paid, manually upgrade
-          await refreshUser();
-          navigate("/?upgraded=true");
+          // Polling timed out — do not assume success, show pending message
+          navigate("/?payment_pending=true");
         }
       };
       poll();
@@ -109,6 +108,7 @@ function AppContent() {
   const [paywallEntry, setPaywallEntry] = useState("default");
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
   const [showCancelledMsg, setShowCancelledMsg] = useState(false);
+  const [showPaymentPending, setShowPaymentPending] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const location = useLocation();
@@ -137,6 +137,11 @@ function AppContent() {
       setShowPaywall(true);
       setPaywallEntry("default");
       setTimeout(() => setShowCancelledMsg(false), 6000);
+      window.history.replaceState({}, "", "/");
+    }
+    if (params.get("payment_pending") === "true") {
+      setShowPaymentPending(true);
+      setTimeout(() => setShowPaymentPending(false), 8000);
       window.history.replaceState({}, "", "/");
     }
   }, []);
@@ -191,6 +196,19 @@ function AppContent() {
 
       {/* Confetti */}
       {showConfetti && <ConfettiBurst />}
+
+      {/* Payment pending message */}
+      <AnimatePresence>
+        {showPaymentPending && (
+          <motion.div
+            initial={{ y: -60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 400 } }}
+            exit={{ y: -60, opacity: 0 }}
+            style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#BA7517", padding: "12px 20px", zIndex: 9100, textAlign: "center" }}>
+            <p style={{ color: "#fff", fontSize: 14, margin: 0 }}>Payment received — your account will be upgraded in the next few minutes. If it doesn't update, contact support.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Cancelled message */}
       <AnimatePresence>

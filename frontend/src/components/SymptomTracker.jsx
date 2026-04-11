@@ -37,7 +37,9 @@ export default function SymptomTracker({ onClose }) {
           skin: res.data.skin || 3
         });
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] SymptomTracker loadToday error:", e);
+    }
   };
 
   const handleSave = async () => {
@@ -45,7 +47,9 @@ export default function SymptomTracker({ onClose }) {
       await axios.post(`${API}/symptoms`, scores, { headers: getHeaders(), withCredentials: true });
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 1500);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] SymptomTracker save error:", e);
+    }
   };
 
   return (

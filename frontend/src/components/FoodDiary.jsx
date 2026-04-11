@@ -29,6 +29,7 @@ export default function FoodDiary({ onOpenPaywall }) {
   const [filter, setFilter] = useState("all");
   const [noteEdit, setNoteEdit] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [stats, setStats] = useState(null);
   const [diaryDates, setDiaryDates] = useState([]);
 
@@ -46,36 +47,50 @@ export default function FoodDiary({ onOpenPaywall }) {
       const res = await axios.get(`${API}/diary?date=${date}`, { headers: getHeaders(), withCredentials: true });
       setEntries(res.data.entries || []);
       setLocked(res.data.locked || false);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] FoodDiary error:", e);
+    }
   };
 
   const loadDiaryDates = async () => {
     try {
       const res = await axios.get(`${API}/diary/dates`, { headers: getHeaders(), withCredentials: true });
       setDiaryDates(res.data.dates || []);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] FoodDiary error:", e);
+    }
   };
 
   const loadStats = async () => {
     try {
       const res = await axios.get(`${API}/profile/stats`, { headers: getHeaders(), withCredentials: true });
       setStats(res.data);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] FoodDiary error:", e);
+    }
   };
 
   const handleSaveNote = async (entryId, note) => {
     try {
       await axios.put(`${API}/diary/note`, { entry_id: entryId, note }, { headers: getHeaders(), withCredentials: true });
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] FoodDiary error:", e);
+    }
   };
 
   const handleDelete = async (entryId) => {
+    if (deleting) return;
+    setDeleting(true);
     try {
       await axios.delete(`${API}/diary/${entryId}`, { headers: getHeaders(), withCredentials: true });
       setEntries(prev => prev.filter(e => e.id !== entryId));
       setConfirmDelete(null);
       loadDiaryDates();
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] FoodDiary delete error:", e);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filteredEntries = entries.filter(e => {
@@ -262,7 +277,7 @@ export default function FoodDiary({ onOpenPaywall }) {
               <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 20 }}>This will permanently remove this entry.</p>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px", fontWeight: 600, cursor: "pointer", color: "var(--text-secondary)", minHeight: 44 }}>Cancel</button>
-                <button onClick={() => handleDelete(confirmDelete)} style={{ flex: 1, background: "#A32D2D", border: "none", borderRadius: 10, padding: "12px", fontWeight: 700, cursor: "pointer", color: "#fff", minHeight: 44 }}>Remove</button>
+                <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ flex: 1, background: "#A32D2D", border: "none", borderRadius: 10, padding: "12px", fontWeight: 700, cursor: "pointer", color: "#fff", minHeight: 44, opacity: deleting ? 0.6 : 1 }}>Remove</button>
               </div>
             </motion.div>
           </motion.div>

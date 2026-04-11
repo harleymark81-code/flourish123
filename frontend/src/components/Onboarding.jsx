@@ -56,12 +56,6 @@ export default function Onboarding({ onComplete }) {
     );
   };
 
-  const toggleGoal = (id) => {
-    setSelectedGoals(prev =>
-      prev.includes(id) ? prev.filter(g => g !== id) : [...prev, g => g !== id ? g : g, id].flat().filter(Boolean)
-    );
-  };
-
   const toggleGoalFixed = (id) => {
     setSelectedGoals(prev =>
       prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]
@@ -318,7 +312,10 @@ export default function Onboarding({ onComplete }) {
               <div style={{ width: "100%", background: "var(--bg-card)", borderRadius: 16, padding: 24, marginBottom: 32, border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>Personalised for</p>
                 <p style={{ fontSize: 18, fontWeight: 700, color: "#534AB7", margin: "4px 0 0" }}>
-                  {selectedConditions.join(", ").replace(/_/g, " ")}
+                  {selectedConditions.map(c => {
+                  const special = { pcos: "PCOS", ibs: "IBS", type2_diabetes: "Type 2 Diabetes" };
+                  return special[c] || c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                }).join(", ")}
                 </p>
               </div>
 

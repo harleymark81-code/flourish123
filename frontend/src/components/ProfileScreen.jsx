@@ -20,14 +20,18 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
     try {
       const res = await axios.get(`${API}/profile/stats`, { headers: getHeaders(), withCredentials: true });
       setStats(res.data);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] ProfileScreen loadStats error:", e);
+    }
   };
 
   const loadReferralStats = async () => {
     try {
       const res = await axios.get(`${API}/referral/stats`, { headers: getHeaders(), withCredentials: true });
       setReferralStats(res.data);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] ProfileScreen loadReferralStats error:", e);
+    }
   };
 
   const handleCopyReferral = async () => {

@@ -189,12 +189,22 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             </p>
 
             {/* Price justification */}
-            <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: "16px 18px", marginBottom: 20, border: "1px solid var(--border)", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
+            <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: "16px 18px", marginBottom: 16, border: "1px solid var(--border)", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
               <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7, margin: 0 }}>
                 People spend <strong style={{ color: "var(--text-primary)" }}>£5.50 on a Starbucks</strong> that spikes their cortisol.{" "}
                 <strong style={{ color: "var(--text-primary)" }}>£45 on one nutritionist appointment</strong> with no daily follow-up.{" "}
                 <strong style={{ color: "var(--text-primary)" }}>£10.99 on Netflix</strong> that has never heard of {primaryCondition.replace(/_/g, " ")}.{" "}
-                <strong style={{ color: "#534AB7" }}>Flourish Premium is £12.99 a month. Less than two coffees.</strong> The only daily health tool built specifically for your condition.
+                <strong style={{ color: "#534AB7" }}>Flourish Premium is £4.17 a month. Less than one coffee.</strong> The only daily health tool built specifically for your condition.
+              </p>
+            </div>
+
+            {/* Founding member banner */}
+            <div style={{ background: "linear-gradient(135deg, #BA7517, #D97706)", borderRadius: 12, padding: "10px 16px", marginBottom: 16, textAlign: "center" }}>
+              <p style={{ color: "#fff", fontWeight: 800, fontSize: 13, margin: 0, letterSpacing: "-0.01em" }}>
+                🔒 Founding Member Price — £49.99/year
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.88)", fontSize: 12, margin: "3px 0 0" }}>
+                Price increases to £79 when we hit 500 members. Lock in forever today.
               </p>
             </div>
 
@@ -207,7 +217,7 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
               <button data-testid="plan-annual-btn" onClick={() => setPlan("annual")}
                 style={{ flex: 1, padding: "12px 8px", borderRadius: 11, border: "none", background: plan === "annual" ? "var(--bg-elevated)" : "transparent", fontWeight: 700, fontSize: 14, color: plan === "annual" ? "#534AB7" : "var(--text-secondary)", cursor: "pointer", boxShadow: plan === "annual" ? "0 2px 12px rgba(83,74,183,0.12)" : "none", transition: "all 0.25s", position: "relative" }}>
                 Annual
-                <span style={{ position: "absolute", top: -10, right: 6, background: "#534AB7", color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>BEST VALUE</span>
+                <span style={{ position: "absolute", top: -10, right: 6, background: "#534AB7", color: "#fff", fontSize: 9, fontWeight: 800, padding: "2px 7px", borderRadius: 6, whiteSpace: "nowrap" }}>MOST POPULAR</span>
               </button>
             </div>
 
@@ -215,26 +225,31 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
             <AnimatePresence mode="wait">
               <motion.div key={plan} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                 style={{ textAlign: "center", padding: "18px 0 16px" }}>
-                <p style={{ fontSize: 13, color: "var(--text-muted)", textDecoration: "line-through", margin: "0 0 4px" }}>
-                  {plan === "monthly" ? "£19.99/month" : "£155.88/year"}
-                </p>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
-                  <span style={{ fontSize: 44, fontWeight: 800, color: "#534AB7", letterSpacing: "-0.03em" }}>
-                    {plan === "monthly" ? "£12.99" : "£79"}
-                  </span>
-                  <span style={{ fontSize: 16, color: "var(--text-secondary)", fontWeight: 500 }}>
-                    {plan === "monthly" ? "/month" : "/year"}
-                  </span>
-                </div>
-                {plan === "annual" && (
-                  <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
-                    <span style={{ background: "rgba(99,153,34,0.12)", color: "#639922", fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 8 }}>Save 51%</span>
-                    <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>£6.58/month equivalent</span>
-                  </div>
+                {plan === "monthly" ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
+                      <span style={{ fontSize: 44, fontWeight: 800, color: "#534AB7", letterSpacing: "-0.03em" }}>£12.99</span>
+                      <span style={{ fontSize: 16, color: "var(--text-secondary)", fontWeight: 500 }}>/month</span>
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <span style={{ background: "rgba(163,45,45,0.1)", color: "#A32D2D", fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 8 }}>
+                        You're paying £71 extra per year vs annual
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ fontSize: 13, color: "var(--text-muted)", textDecoration: "line-through", margin: "0 0 4px" }}>£79/year</p>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4 }}>
+                      <span style={{ fontSize: 44, fontWeight: 800, color: "#534AB7", letterSpacing: "-0.03em" }}>£49.99</span>
+                      <span style={{ fontSize: 16, color: "var(--text-secondary)", fontWeight: 500 }}>/year</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
+                      <span style={{ background: "rgba(99,153,34,0.12)", color: "#639922", fontSize: 12, fontWeight: 800, padding: "3px 10px", borderRadius: 8 }}>Save 68%</span>
+                      <span style={{ color: "var(--text-secondary)", fontSize: 13 }}>£4.17/month</span>
+                    </div>
+                  </>
                 )}
-                <p style={{ fontSize: 12, color: "#BA7517", fontWeight: 700, margin: "10px 0 2px" }}>
-                  When we launch publicly the price increases. Lock in your price forever today.
-                </p>
               </motion.div>
             </AnimatePresence>
 

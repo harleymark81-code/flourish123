@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";  // fallback for local dev
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";
 const API = BACKEND_URL + "/api";
 console.log("[Flourish] API base URL:", API);
 
@@ -10,35 +10,22 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem("flourish_token"));
 
-  const getHeaders = () => token ? { Authorization: `Bearer ${token}` } : {};
+  // Auth is handled via httpOnly cookie (secure) — no localStorage token storage
+  const getHeaders = () => ({});
 
   useEffect(() => {
-    const savedToken = localStorage.getItem("flourish_token");
-    if (savedToken) {
-      setToken(savedToken);
-      axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${savedToken}` },
-        withCredentials: true
-      }).then(res => {
-        setUser(res.data);
-      }).catch(() => {
-        localStorage.removeItem("flourish_token");
-        setToken(null);
-      }).finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    // Attempt to restore session via cookie
+    axios.get(`${API}/auth/me`, { withCredentials: true })
+      .then(res => setUser(res.data))
+      .catch(() => setUser(null))
+      .finally(() => setLoading(false));
   }, []);
 
   const register = async (email, password, name) => {
-    // Capture affiliate/referral code from URL at time of registration
     const referred_by = new URLSearchParams(window.location.search).get("ref") || undefined;
     const res = await axios.post(`${API}/auth/register`, { email, password, name, referred_by }, { withCredentials: true });
-    const { user: u, token: t } = res.data;
-    localStorage.setItem("flourish_token", t);
-    setToken(t);
+    const { user: u } = res.data;
     setUser(u);
     // Signup confirmation email
     try {
@@ -62,35 +49,32 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const res = await axios.post(`${API}/auth/login`, { email, password }, { withCredentials: true });
-    const { user: u, token: t } = res.data;
-    localStorage.setItem("flourish_token", t);
-    setToken(t);
+    const { user: u } = res.data;
     setUser(u);
     return u;
   };
 
   const logout = async () => {
     await axios.post(`${API}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
-    localStorage.removeItem("flourish_token");
-    setToken(null);
     setUser(null);
   };
 
   const refreshUser = async () => {
-    if (!token) return;
     try {
-      const res = await axios.get(`${API}/auth/me`, { headers: getHeaders(), withCredentials: true });
+      const res = await axios.get(`${API}/auth/me`, { withCredentials: true });
       setUser(res.data);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Flourish] refreshUser failed:", e);
+    }
   };
 
   const updateProfile = async (profileData) => {
-    await axios.put(`${API}/profile`, profileData, { headers: getHeaders(), withCredentials: true });
+    await axios.put(`${API}/profile`, profileData, { withCredentials: true });
     await refreshUser();
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, token, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>
+    <AuthContext.Provider value={{ user, setUser, loading, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>
       {children}
     </AuthContext.Provider>
   );
