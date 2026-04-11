@@ -246,9 +246,30 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Admin-Token"],
-    expose_headers=["*"],
+    # expose_headers must NOT be "*" when allow_credentials=True — the CORS spec
+    # treats "*" as a literal header name (not a wildcard) in credentialed responses,
+    # which causes browsers to reject the response.
+    expose_headers=["Content-Type", "Authorization"],
     max_age=86400,
 )
+
+# ── Auth cookie helper ────────────────────────────────────────────────────────
+def _set_auth_cookie(response, token: str) -> None:
+    """
+    Set the httpOnly auth cookie.
+    Production: SameSite=None + Secure=True  — required for cross-site XHR
+                (frontend on netlify.app, backend on railway.app are different sites).
+                SameSite=Lax is NOT sent by browsers in cross-site XHR even with
+                withCredentials:true; SameSite=None is the correct value here.
+    Development: SameSite=Lax + Secure=False — works over plain HTTP localhost.
+    """
+    response.set_cookie(
+        "access_token", token,
+        httponly=True,
+        secure=IS_PRODUCTION,
+        samesite="none" if IS_PRODUCTION else "lax",
+        max_age=86400 * 7,
+    )
 
 # ── PyObjectId helper ──────────────────────────────────────────────────────────
 def oid(v: Any) -> str:
@@ -424,10 +445,14 @@ async def register(request: Request, data: RegisterRequest):
     from fastapi.responses import JSONResponse as JR
     email = data.email.lower().strip()
 
+    logger.info(f"[register] attempt email={email} password_len={len(data.password)} name={repr(data.name)}")
+
     if len(data.password) < 8:
+        logger.info(f"[register] rejected — password too short for {email}")
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     if await db.users.find_one({"email": email}):
+        logger.info(f"[register] rejected — email already registered: {email}")
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user_doc = {
@@ -453,7 +478,12 @@ async def register(request: Request, data: RegisterRequest):
         "token_version": 0,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    result = await db.users.insert_one(user_doc)
+    try:
+        result = await db.users.insert_one(user_doc)
+    except Exception as e:
+        logger.error(f"[register] insert failed for {email}: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     user_doc["_id"] = str(result.inserted_id)
     user_doc.pop("password_hash", None)
 
@@ -466,10 +496,8 @@ async def register(request: Request, data: RegisterRequest):
 
     token = create_access_token(str(result.inserted_id), email, token_version=0)
     resp = JR(content={"user": user_doc, "token": token})
-    resp.set_cookie(
-        "access_token", token, httponly=True,
-        secure=IS_PRODUCTION, samesite="lax", max_age=86400 * 7
-    )
+    _set_auth_cookie(resp, token)
+    logger.info(f"[register] success for {email} id={result.inserted_id}")
     return resp
 
 @api_router.post("/auth/login")
@@ -515,10 +543,7 @@ async def login(request: Request, data: LoginRequest):
     token_version = user.get("token_version", 0)
     token = create_access_token(user_id, email, token_version=token_version)
     resp = JR(content={"user": user, "token": token})
-    resp.set_cookie(
-        "access_token", token, httponly=True,
-        secure=IS_PRODUCTION, samesite="lax", max_age=86400 * 7
-    )
+    _set_auth_cookie(resp, token)
     return resp
 
 @api_router.get("/auth/me")
