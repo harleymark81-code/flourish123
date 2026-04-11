@@ -6,9 +6,7 @@
 [build.environment]
   REACT_APP_BACKEND_URL    = "https://flourish123-production.up.railway.app"
   REACT_APP_FRONTEND_URL   = "https://theflourishapp.netlify.app"
-  REACT_APP_EMAILJS_SERVICE_ID  = "service_j42my6w"
-  REACT_APP_EMAILJS_TEMPLATE_ID = "template_n6z3imq"
-  REACT_APP_EMAILJS_PUBLIC_KEY  = "DR-sqj6t_mREKLmE8"
+  # REACT_APP_EMAILJS_* keys are stored in Netlify environment variables (not committed here)
 
 [[redirects]]
   from   = "/*"
