@@ -152,6 +152,7 @@ function AppContent() {
   const sendPremiumEmail = async (email, plan) => {
     try {
       const emailjs = await import("@emailjs/browser");
+      // EmailJS v4 requires { publicKey } object as 4th argument (not a plain string)
       await emailjs.default.send(
         process.env.REACT_APP_EMAILJS_SERVICE_ID,
         process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
@@ -159,9 +160,9 @@ function AppContent() {
           event_type: "New Premium Subscriber",
           user_email: email,
           details: `Plan: ${plan}`,
-          time: new Date().toLocaleString("en-GB")
+          time: new Date().toLocaleString("en-GB"),
         },
-        process.env.REACT_APP_EMAILJS_PUBLIC_KEY
+        { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY }
       );
     } catch (e) {
       console.warn("EmailJS error:", e);

@@ -5,29 +5,42 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-pr
 const API = BACKEND_URL + "/api";
 console.log("[Flourish] API base URL:", API);
 
+// ── Global axios defaults ─────────────────────────────────────────────────────
+// withCredentials must be true globally so the httpOnly auth cookie is included
+// on every request — setting it per-call is error-prone and easy to miss.
+axios.defaults.withCredentials = true;
+
 export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Auth is handled via httpOnly cookie (secure) — no localStorage token storage
+  // Auth is handled via httpOnly cookie — no token in localStorage/headers.
   const getHeaders = () => ({});
 
   useEffect(() => {
-    // Attempt to restore session via cookie
-    axios.get(`${API}/auth/me`, { withCredentials: true })
+    axios.get(`${API}/auth/me`)
       .then(res => setUser(res.data))
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
 
   const register = async (email, password, name) => {
-    const referred_by = new URLSearchParams(window.location.search).get("ref") || undefined;
-    const res = await axios.post(`${API}/auth/register`, { email, password, name, referred_by }, { withCredentials: true });
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    // Build payload explicitly — no undefined values that could be mishandled
+    const payload = {
+      email: email.trim().toLowerCase(),
+      password,
+      name: name || "",
+      ...(ref ? { referred_by: ref } : {}),
+    };
+    const res = await axios.post(`${API}/auth/register`, payload, {
+      headers: { "Content-Type": "application/json" },
+    });
     const { user: u } = res.data;
     setUser(u);
-    // Signup confirmation email
+    // Signup notification email — EmailJS v4 API uses { publicKey } object
     try {
       const emailjs = await import("@emailjs/browser");
       await emailjs.default.send(
@@ -36,10 +49,10 @@ export function AuthProvider({ children }) {
         {
           event_type: "New Signup",
           user_email: email,
-          details: `Name: ${name || email.split("@")[0]}${referred_by ? ` | Ref: ${referred_by}` : ""}`,
-          time: new Date().toLocaleString("en-GB")
+          details: `Name: ${name || email.split("@")[0]}${ref ? ` | Ref: ${ref}` : ""}`,
+          time: new Date().toLocaleString("en-GB"),
         },
-        process.env.REACT_APP_EMAILJS_PUBLIC_KEY
+        { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY }
       );
     } catch (e) {
       console.warn("[Flourish] EmailJS signup notification failed:", e);
@@ -48,20 +61,23 @@ export function AuthProvider({ children }) {
   };
 
   const login = async (email, password) => {
-    const res = await axios.post(`${API}/auth/login`, { email, password }, { withCredentials: true });
+    const res = await axios.post(`${API}/auth/login`,
+      { email: email.trim().toLowerCase(), password },
+      { headers: { "Content-Type": "application/json" } }
+    );
     const { user: u } = res.data;
     setUser(u);
     return u;
   };
 
   const logout = async () => {
-    await axios.post(`${API}/auth/logout`, {}, { withCredentials: true }).catch(() => {});
+    await axios.post(`${API}/auth/logout`, {}).catch(() => {});
     setUser(null);
   };
 
   const refreshUser = async () => {
     try {
-      const res = await axios.get(`${API}/auth/me`, { withCredentials: true });
+      const res = await axios.get(`${API}/auth/me`);
       setUser(res.data);
     } catch (e) {
       console.error("[Flourish] refreshUser failed:", e);
@@ -69,7 +85,7 @@ export function AuthProvider({ children }) {
   };
 
   const updateProfile = async (profileData) => {
-    await axios.put(`${API}/profile`, profileData, { withCredentials: true });
+    await axios.put(`${API}/profile`, profileData);
     await refreshUser();
   };
 
