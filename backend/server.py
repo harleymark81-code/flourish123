@@ -597,24 +597,18 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
     monthly_avg = round(sum(e.get("overall_score", 0) for e in monthly_entries) / len(monthly_entries)) if monthly_entries else 0
 
     streak = current_user.get("streak", 0)
-    bonus_scans = 0
-    if streak >= 3:
-        bonus_scans = 2
-    elif streak >= 1:
-        bonus_scans = 1
-
     is_premium = current_user.get("is_premium", False)
     preview_active = _check_preview_active(current_user)
+    effective_premium = is_premium or preview_active
 
     return {
         "today_ratings": today_ratings,
-        "daily_limit": FREE_DAILY_RATINGS + bonus_scans,
-        "remaining_ratings": max(0, FREE_DAILY_RATINGS + bonus_scans - today_ratings),
+        "daily_limit": FREE_DAILY_RATINGS,
+        "remaining_ratings": max(0, FREE_DAILY_RATINGS - today_ratings) if not effective_premium else None,
         "monthly_avg": monthly_avg,
-        "streak": current_user.get("streak", 0),
+        "streak": streak,
         "longest_streak": current_user.get("longest_streak", 0),
-        "bonus_scans": bonus_scans,
-        "is_premium": is_premium or preview_active,
+        "is_premium": effective_premium,
         "preview_active": preview_active
     }
 
@@ -644,11 +638,8 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
 
     if not _effective_premium(current_user):
         today_count = await db.diary.count_documents({"user_id": uid, "date": today})
-        streak = current_user.get("streak", 0)
-        bonus = 2 if streak >= 3 else (1 if streak >= 1 else 0)
-        daily_limit = FREE_DAILY_RATINGS + bonus
-        if today_count >= daily_limit:
-            raise HTTPException(status_code=429, detail=f"Daily limit of {daily_limit} ratings reached. Upgrade to Premium for unlimited ratings.")
+        if today_count >= FREE_DAILY_RATINGS:
+            raise HTTPException(status_code=429, detail=f"Daily limit of {FREE_DAILY_RATINGS} scans reached. Upgrade to Premium for unlimited ratings.")
 
     # ── 24h barcode cache check ────────────────────────────────────────────────
     if data.barcode:
@@ -975,9 +966,9 @@ async def get_streak_reward(current_user: dict = Depends(get_current_user)):
 
     reward = None
     if streak == 1:
-        reward = {"type": "bonus_scan", "amount": 1, "message": "Welcome back. You have earned 1 bonus scan today."}
+        reward = {"type": "milestone", "message": "Welcome back. Keep your streak going!"}
     elif streak == 3:
-        reward = {"type": "bonus_scan", "amount": 2, "message": "3 day streak! You have earned 2 bonus scans today."}
+        reward = {"type": "milestone", "message": "3 day streak! You are building a great habit."}
     elif streak == 7:
         reward = {"type": "weekly_insight", "message": "7 day streak! You have unlocked your weekly health insight."}
     elif streak == 14:
@@ -991,7 +982,7 @@ async def get_streak_reward(current_user: dict = Depends(get_current_user)):
             )
             reward = {"type": "premium_preview", "message": "2 week streak! You have earned a free 24-hour premium preview!"}
         else:
-            reward = {"type": "bonus_scan", "amount": 2, "message": "14 day streak! Great work!"}
+            reward = {"type": "milestone", "message": "14 day streak! Great work staying consistent."}
     elif streak == 30:
         reward = {"type": "free_week", "message": "30 day streak! You have earned one week of Flourish Premium free."}
 

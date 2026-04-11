@@ -484,7 +484,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Streak</p>
               </div>
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.remaining_ratings}</p>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.is_premium ? "∞" : stats.remaining_ratings}</p>
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Left today</p>
               </div>
             </div>
@@ -493,7 +493,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
                   <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>
-                    {stats.today_ratings} of {stats.daily_limit} free scans used today
+                    {stats.today_ratings} of 3 free scans used today
                   </span>
                   {stats.remaining_ratings === 0 && (
                     <motion.button
