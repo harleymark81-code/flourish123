@@ -218,18 +218,17 @@ async def lifespan(app: FastAPI):
             {"$set": {"password_hash": hash_password(admin_password)}}
         )
 
-    # ── Grant is_admin to the owner account ───────────────────────────────────
+    # ── Grant is_admin to the owner account (runs every startup, idempotent) ──
     OWNER_EMAIL = "theflourishfoodapp@gmail.com"
     owner = await db.users.find_one({"email": OWNER_EMAIL})
     if owner:
-        if not owner.get("is_admin"):
-            await db.users.update_one(
-                {"email": OWNER_EMAIL},
-                {"$set": {"is_admin": True, "role": "admin"}}
-            )
-            logger.info(f"Granted is_admin to owner account: {OWNER_EMAIL}")
+        await db.users.update_one(
+            {"email": OWNER_EMAIL},
+            {"$set": {"is_admin": True, "role": "admin"}}
+        )
+        logger.info(f"[startup] is_admin=True confirmed for owner account: {OWNER_EMAIL}")
     else:
-        logger.warning(f"Owner account not found at startup: {OWNER_EMAIL}")
+        logger.warning(f"[startup] Owner account not found in DB: {OWNER_EMAIL} — will be granted on first login after registration")
 
     yield
 
@@ -1417,6 +1416,23 @@ async def admin_users(request: Request):
             raise HTTPException(status_code=403, detail="Admin access required")
     users = await db.users.find({}, {"password_hash": 0}).sort("created_at", -1).to_list(500)
     return {"users": [doc_to_dict(u) for u in users]}
+
+@api_router.post("/admin/grant-admin")
+async def grant_admin(request: Request):
+    """One-shot: grant is_admin to a user by email. Protected by X-Admin-Token."""
+    _verify_admin(request)
+    body = await request.json()
+    email = body.get("email", "").lower().strip()
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+    result = await db.users.update_one(
+        {"email": email},
+        {"$set": {"is_admin": True, "role": "admin"}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail=f"No user found with email {email}")
+    user = await db.users.find_one({"email": email}, {"password_hash": 0})
+    return {"success": True, "user": doc_to_dict(user)}
 
 @api_router.get("/admin/transactions")
 async def admin_transactions(request: Request):

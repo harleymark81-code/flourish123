@@ -21,7 +21,12 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     axios.get(`${API}/auth/me`)
-      .then(res => { setUser(res.data); identifyUser(res.data); })
+      .then(res => {
+        console.log("[Flourish] /auth/me response:", res.data);
+        console.log("[Flourish] is_admin:", res.data?.is_admin, "| is_premium:", res.data?.is_premium);
+        setUser(res.data);
+        identifyUser(res.data);
+      })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -68,6 +73,8 @@ export function AuthProvider({ children }) {
       { headers: { "Content-Type": "application/json" } }
     );
     const { user: u } = res.data;
+    console.log("[Flourish] login response user:", u);
+    console.log("[Flourish] is_admin:", u?.is_admin, "| is_premium:", u?.is_premium);
     setUser(u);
     identifyUser(u);
     ph.userLoggedIn();
@@ -98,6 +105,7 @@ export function AuthProvider({ children }) {
   // Admin users bypass all premium gates automatically.
   // Use this everywhere instead of user?.is_premium directly.
   const isPremium = !!(user?.is_premium || user?.is_admin);
+  if (user) console.log("[Flourish] isPremium computed:", isPremium, "(is_premium:", user.is_premium, "| is_admin:", user.is_admin, ")");
 
   return (
     <AuthContext.Provider value={{ user, setUser, loading, isPremium, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>
