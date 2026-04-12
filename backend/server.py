@@ -13,6 +13,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Annotated
+import asyncio
 import os
 import logging
 import bcrypt
@@ -70,40 +71,21 @@ async def call_anthropic(system: str, user_msg: str) -> str:
             raise ValueError(f"Anthropic API error {resp.status_code}: {error_body}")
         return resp.json()["content"][0]["text"]
 
-# ── EmailJS helper ────────────────────────────────────────────────────────────
-async def send_emailjs_email(template_id: str, template_params: dict) -> bool:
-    """Send an email via EmailJS REST API. Returns True on success."""
-    service_id = os.environ.get("EMAILJS_SERVICE_ID", "")
-    public_key  = os.environ.get("EMAILJS_PUBLIC_KEY", "")
-    if not service_id or not template_id or not public_key:
-        logging.getLogger(__name__).warning("EmailJS env vars not set — email not sent")
-        return False
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.post(
-                "https://api.emailjs.com/api/v1.0/email/send",
-                json={
-                    "service_id":      service_id,
-                    "template_id":     template_id,
-                    "user_id":         public_key,
-                    "template_params": template_params,
-                },
-                headers={"Content-Type": "application/json"},
-            )
-            return resp.status_code == 200
-    except Exception as e:
-        logging.getLogger(__name__).error(f"EmailJS error: {e}")
-        return False
+# ── Email service (Resend) ────────────────────────────────────────────────────
+from services.email import (
+    send_welcome_email,
+    send_subscription_confirmed_email,
+    send_trial_ending_email,
+    send_scan_limit_email,
+    send_referral_reward_email,
+    send_password_reset_email,
+    send_weekly_report_email,
+)
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
 async def _send_weekly_reports():
-    """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ scans."""
+    """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ diary entries."""
     logger_w = logging.getLogger(__name__)
-    template_id = os.environ.get("EMAILJS_TEMPLATE_ID", "")
-    if not template_id:
-        logger_w.info("EMAILJS_TEMPLATE_ID not set — skipping weekly reports")
-        return
-
     seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
     users = await db.users.find(
         {"email": {"$exists": True}, "role": {"$ne": "admin"}},
@@ -122,18 +104,14 @@ async def _send_weekly_reports():
         avg_score   = round(sum(e.get("overall_score", 0) for e in entries) / len(entries))
         green_foods = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) >= 70))[:3]
         red_foods   = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) < 40))[:3]
-        message = (
-            f"Your Flourish Weekly Report\n\n"
-            f"Scans this week: {len(entries)}\n"
-            f"Average food score: {avg_score}/100\n\n"
-            f"Best foods this week: {', '.join(green_foods) if green_foods else 'Keep logging to see your top foods'}\n"
-            f"Foods to watch: {', '.join(red_foods) if red_foods else 'None this week — great work!'}\n\n"
-            f"Keep logging to build a clearer picture of how food affects your health."
+        ok = await send_weekly_report_email(
+            to=user["email"],
+            name=user.get("name", ""),
+            scan_count=len(entries),
+            avg_score=avg_score,
+            green_foods=green_foods,
+            red_foods=red_foods,
         )
-        ok = await send_emailjs_email(template_id, {
-            "to_email": user["email"],
-            "message":  message,
-        })
         if ok:
             sent += 1
     logger_w.info(f"Weekly reports: sent {sent}/{len(users)} emails")
@@ -520,6 +498,8 @@ async def register(request: Request, data: RegisterRequest):
     resp = JR(content={"user": user_doc, "token": token})
     _set_auth_cookie(resp, token)
     logger.info(f"[register] success for {email} id={result.inserted_id}")
+    # Welcome email — fire and forget, never blocks the response
+    asyncio.create_task(send_welcome_email(to=email, name=user_doc.get("name", "")))
     return resp
 
 @api_router.post("/auth/login")
@@ -677,6 +657,17 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     if not _effective_premium(current_user):
         today_count = await db.diary.count_documents({"user_id": uid, "date": today})
         if today_count >= FREE_DAILY_RATINGS:
+            # Send limit-reached nudge once per day (track with scan_limit_email_date)
+            last_sent = current_user.get("scan_limit_email_date", "")
+            if last_sent != today:
+                await db.users.update_one(
+                    {"_id": ObjectId(uid)},
+                    {"$set": {"scan_limit_email_date": today}}
+                )
+                asyncio.create_task(send_scan_limit_email(
+                    to=current_user.get("email", ""),
+                    name=current_user.get("name", ""),
+                ))
             raise HTTPException(status_code=429, detail=f"Daily limit of {FREE_DAILY_RATINGS} scans reached. Upgrade to Premium for unlimited ratings.")
 
     # ── 24h barcode cache check ────────────────────────────────────────────────
@@ -1182,12 +1173,41 @@ async def stripe_webhook(request: Request):
                             }}
                         )
                         logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan})")
+                        # Subscription confirmed email
+                        upgraded_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
+                        if upgraded_user:
+                            asyncio.create_task(send_subscription_confirmed_email(
+                                to=upgraded_user.get("email", ""),
+                                name=upgraded_user.get("name", ""),
+                                plan=plan,
+                            ))
+                        # Referral reward email — notify referrer if this checkout had a referral code
+                        if referral_code:
+                            referrer = await db.users.find_one(
+                                {"referral_code": referral_code},
+                                {"email": 1, "name": 1}
+                            )
+                            if referrer and referrer.get("email") != upgraded_user.get("email"):
+                                asyncio.create_task(send_referral_reward_email(
+                                    to=referrer.get("email", ""),
+                                    referrer_name=referrer.get("name", ""),
+                                    referred_name=upgraded_user.get("name", "") if upgraded_user else "",
+                                ))
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
         elif event_type == "customer.subscription.trial_will_end":
             customer_id = data_obj.get("customer")
             logger.info(f"Trial will end soon for Stripe customer: {customer_id}")
+            if customer_id:
+                uid = await _find_uid_by_customer(customer_id)
+                if uid:
+                    trial_user = await db.users.find_one({"_id": ObjectId(uid)}, {"email": 1, "name": 1})
+                    if trial_user:
+                        asyncio.create_task(send_trial_ending_email(
+                            to=trial_user.get("email", ""),
+                            name=trial_user.get("name", ""),
+                        ))
 
         elif event_type == "customer.subscription.updated":
             sub_status = data_obj.get("status", "")
@@ -1783,11 +1803,11 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
         )
         reset_link = f"https://theflourishapp.netlify.app/reset-password?token={token}"
-        template_id = os.environ.get("EMAILJS_TEMPLATE_ID", "")
-        ok = await send_emailjs_email(template_id, {
-            "to_email": email,
-            "message":  f"Hi {user.get('name', 'there')},\n\nClick the link below to reset your Flourish password. This link expires in 2 hours.\n\n{reset_link}\n\nIf you didn't request this, you can safely ignore this email.",
-        })
+        ok = await send_password_reset_email(
+            to=email,
+            name=user.get("name", ""),
+            reset_link=reset_link,
+        )
         if not ok:
             logger.warning(f"Password reset email failed for {email} — reset link: {reset_link}")
         else:
