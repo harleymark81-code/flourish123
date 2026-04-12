@@ -147,7 +147,7 @@ const NUDGE_MESSAGES = [
 ];
 
 export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName, onPendingFoodConsumed }) {
-  const { user, getHeaders, API } = useAuth();
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState(null);
   const [dailyTip, setDailyTip] = useState("");
@@ -194,7 +194,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     loadRecentRatings();
     checkStreakReward();
     // Nudge banner for free users every 2–3 sessions
-    if (!user?.is_premium) {
+    if (!isPremium) {
       const count = parseInt(sessionStorage.getItem("fl_session_count") || "0", 10) + 1;
       sessionStorage.setItem("fl_session_count", String(count));
       const threshold = 2 + Math.round(Math.random()); // 2 or 3
@@ -681,7 +681,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.17, type: "spring" }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => { if (user?.is_premium) { setShowSymptoms(true); ph.symptomCheckinOpened(); } else { onOpenPaywall("symptoms"); } }}
+          onClick={() => { if (isPremium) { setShowSymptoms(true); ph.symptomCheckinOpened(); } else { onOpenPaywall("symptoms"); } }}
           style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
           <Heart size={16} color="#534AB7" />
           <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
@@ -727,7 +727,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
-        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={user?.is_premium} onOpenPaywall={() => handleOpenPaywall()} />}
+        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={isPremium} onOpenPaywall={() => handleOpenPaywall()} />}
         {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
         {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
         {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => { setShowSubscription(false); handleOpenPaywall(); }} />}

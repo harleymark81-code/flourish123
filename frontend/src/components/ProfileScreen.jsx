@@ -205,7 +205,7 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
 }
 
 export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
-  const { user, logout, getHeaders, API } = useAuth();
+  const { user, isPremium, logout, getHeaders, API } = useAuth();
   const [stats, setStats] = useState(null);
   const [referralStats, setReferralStats] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -214,7 +214,6 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const [deleteError, setDeleteError] = useState("");
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState("");
-  const isPremium = user?.is_premium;
 
   useEffect(() => {
     loadStats();

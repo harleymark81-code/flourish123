@@ -19,8 +19,7 @@ function formatDate(dateStr) {
 }
 
 export default function FoodDiary({ onOpenPaywall }) {
-  const { user, getHeaders, API } = useAuth();
-  const isPremium = user?.is_premium;
+  const { user, isPremium, getHeaders, API } = useAuth();
 
   // Always call hooks — no early return before hooks
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);

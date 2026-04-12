@@ -226,13 +226,12 @@ function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock
 }
 
 export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }) {
-  const { user, getHeaders, API } = useAuth();
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [logged, setLogged] = useState(false);
   const [particles, setParticles] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
   const [isFavourite, setIsFavourite] = useState(false);
   const [savingFav, setSavingFav] = useState(false);
-  const isPremium = user?.is_premium;
 
   const foodName = rating.food_name || rating.name;
 

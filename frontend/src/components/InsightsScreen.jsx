@@ -55,7 +55,7 @@ function SymptomBar({ label, value, max = 5 }) {
 }
 
 export default function InsightsScreen({ onOpenPaywall }) {
-  const { user, getHeaders, API } = useAuth();
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [badges, setBadges] = useState(null);
   const [report, setReport] = useState(null);
   const [patterns, setPatterns] = useState(null);
@@ -64,7 +64,6 @@ export default function InsightsScreen({ onOpenPaywall }) {
   const [loadingReport, setLoadingReport] = useState(true);
   const [badgesError, setBadgesError] = useState(false);
   const [activeSection, setActiveSection] = useState("progress");
-  const isPremium = user?.is_premium;
 
   useEffect(() => {
     if (isPremium) ph.insightsViewed();

@@ -23,11 +23,10 @@ const FEATURES_PREMIUM = [
 ];
 
 export default function SubscriptionScreen({ onClose, onUpgrade }) {
-  const { user, getHeaders, API } = useAuth();
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [loadingPortal, setLoadingPortal] = useState(false);
   const [loadingCheckout, setLoadingCheckout] = useState(null);
   const [error, setError] = useState("");
-  const isPremium = user?.is_premium;
 
   const planLabel = user?.premium_plan === "annual" ? "Annual" : "Monthly";
   const planPrice = user?.premium_plan === "annual" ? "£49.99/year" : "£12.99/month";

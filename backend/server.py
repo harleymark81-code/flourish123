@@ -623,7 +623,7 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
     streak = current_user.get("streak", 0)
     is_premium = current_user.get("is_premium", False)
     preview_active = _check_preview_active(current_user)
-    effective_premium = is_premium or preview_active
+    effective_premium = current_user.get("is_admin", False) or is_premium or preview_active
 
     return {
         "today_ratings": today_ratings,
@@ -650,8 +650,8 @@ def _check_preview_active(user: dict) -> bool:
         return False
 
 def _effective_premium(user: dict) -> bool:
-    """Return True if user is premium (paid or active preview)."""
-    return user.get("is_premium", False) or _check_preview_active(user)
+    """Return True if user is premium (paid, active preview, or admin)."""
+    return user.get("is_admin", False) or user.get("is_premium", False) or _check_preview_active(user)
 
 # ── FOOD RATING ────────────────────────────────────────────────────────────────
 @api_router.post("/food/rate")

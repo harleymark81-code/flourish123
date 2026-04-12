@@ -24,8 +24,7 @@ function ScoreDot({ score }) {
 }
 
 export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
-  const { user, getHeaders, API } = useAuth();
-  const isPremium = user?.is_premium;
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [activeTab, setActiveTab] = useState("favourites");
   const [favourites, setFavourites] = useState([]);
   const [history, setHistory] = useState([]);

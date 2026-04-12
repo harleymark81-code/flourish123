@@ -95,8 +95,12 @@ export function AuthProvider({ children }) {
     await refreshUser();
   };
 
+  // Admin users bypass all premium gates automatically.
+  // Use this everywhere instead of user?.is_premium directly.
+  const isPremium = !!(user?.is_premium || user?.is_admin);
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>
+    <AuthContext.Provider value={{ user, setUser, loading, isPremium, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>
       {children}
     </AuthContext.Provider>
   );
