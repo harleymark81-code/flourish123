@@ -18,6 +18,7 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
   const [cycleLength, setCycleLength] = useState(28);
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const [cycleError, setCycleError] = useState("");
 
   useEffect(() => {
     loadCycle();
@@ -33,12 +34,14 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
   const handleLogPeriod = async () => {
     if (!periodDate) return;
     setSaving(true);
+    setCycleError("");
     try {
       await axios.post(`${API}/cycle/log`, { period_start: periodDate, period_length: cycleLength }, { headers: getHeaders(), withCredentials: true });
       setShowLog(false);
       await loadCycle();
     } catch (e) {
       console.error("[Flourish] cycle log error:", e);
+      setCycleError("Couldn't save. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -177,8 +180,11 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
                       ))}
                     </div>
                   </div>
+                  {cycleError && (
+                    <p style={{ fontSize: 12, color: "#A32D2D", margin: 0, padding: "6px 0" }}>{cycleError}</p>
+                  )}
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setShowLog(false)}
+                    <button onClick={() => { setShowLog(false); setCycleError(""); }}
                       style={{ flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, padding: "11px", fontSize: 14, cursor: "pointer", color: "var(--text-secondary)" }}>
                       Cancel
                     </button>
@@ -206,6 +212,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState("");
   const isPremium = user?.is_premium;
 
   useEffect(() => {
@@ -251,12 +258,15 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
   const handleManageSubscription = async () => {
     setPortalLoading(true);
+    setPortalError("");
     try {
       const res = await axios.post(`${API}/payments/portal`, {}, { headers: getHeaders(), withCredentials: true });
       window.location.href = res.data.url;
     } catch (e) {
       console.error("[Flourish] portal error:", e);
       setPortalLoading(false);
+      setPortalError("Couldn't open subscription portal. Please try again.");
+      setTimeout(() => setPortalError(""), 4000);
     }
   };
 
@@ -413,17 +423,27 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
         {/* Manage subscription — premium only */}
         {isPremium && (
-          <motion.div whileTap={{ scale: 0.97 }} onClick={handleManageSubscription}
-            style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: portalLoading ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, opacity: portalLoading ? 0.7 : 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <Crown size={18} color="#F59E0B" />
-              <div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>{portalLoading ? "Opening portal..." : "Manage subscription"}</p>
-                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Cancel, upgrade or view billing</p>
+          <>
+            <motion.div whileTap={{ scale: 0.97 }} onClick={handleManageSubscription}
+              style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: portalLoading ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: portalError ? 6 : 12, opacity: portalLoading ? 0.7 : 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Crown size={18} color="#F59E0B" />
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>{portalLoading ? "Opening portal..." : "Manage subscription"}</p>
+                  <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Cancel, upgrade or view billing</p>
+                </div>
               </div>
-            </div>
-            <ChevronRight size={16} color="#534AB7" />
-          </motion.div>
+              <ChevronRight size={16} color="#534AB7" />
+            </motion.div>
+            <AnimatePresence>
+              {portalError && (
+                <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{portalError}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
         )}
 
         {/* Affiliate Link */}

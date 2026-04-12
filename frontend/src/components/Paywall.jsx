@@ -18,10 +18,19 @@ const PAYWALL_HEADLINES = {
 const ENTRY_MESSAGES = {
   diary: "Your food diary is a Flourish Premium feature. Track every food you eat, see your patterns, and watch your health transform.",
   inflammation: "Your inflammation score is waiting. Inflammation is one of the biggest drivers of your condition.",
+  hormonal: "Your hormonal impact score is ready. This shows exactly how this food interacts with your hormones.",
   gut_health: "Your gut health score is ready. Gut health directly affects hormonal balance.",
   condition_insight: "Your personalised insight is one tap away. This is where Flourish gets specific to your body.",
   alternatives: "There are 2 more foods that score better for your condition. See them.",
+  swaps: "See personalised food swaps tailored to your exact conditions — rated and ready to try.",
   meal_plan: "Your full day meal plan is ready.",
+  scan_limit: "You've used all 3 free scans for today. Upgrade to scan unlimited foods every day.",
+  symptoms: "Symptom tracking is a Premium feature. Log how you feel daily and uncover patterns between food and your health.",
+  favourites: "You've reached the 3-favourite limit on the free plan. Upgrade to save unlimited foods.",
+  history: "See your full scan history, filter by score, and track what you eat over time.",
+  insights: "Unlock your streaks, weekly food scores, symptom patterns, and personalised badges.",
+  patterns: "After 14+ days of logging, Flourish identifies patterns between what you eat and how you feel — personalised to your condition.",
+  shopping_list: "Build a personalised shopping list of foods that work for your condition.",
   default: ""
 };
 

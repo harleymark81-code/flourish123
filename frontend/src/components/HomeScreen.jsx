@@ -159,6 +159,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   const [showSubscription, setShowSubscription] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nudgeMsg, setNudgeMsg] = useState(null);
+  const [barcodeError, setBarcodeError] = useState("");
 
   const handleOpenPaywall = (entry = "default") => {
     if (onOpenPaywall) onOpenPaywall(entry);
@@ -301,7 +302,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       setCurrentRating(res.data);
     } catch (e) {
       if (e.response?.status === 429) {
-        handleOpenPaywall();
+        handleOpenPaywall("scan_limit");
       }
     } finally {
       setLoading(false);
@@ -334,10 +335,15 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         }, { headers: getHeaders(), withCredentials: true });
         setCurrentRating(ratingRes.data);
       } else {
-        alert(lookupRes.data.message || "Product not found. Try searching by name.");
+        setBarcodeError(lookupRes.data.message || "Product not found. Try searching by name.");
+        setTimeout(() => setBarcodeError(""), 5000);
       }
     } catch (e) {
-      if (e.response?.status === 429) handleOpenPaywall();
+      if (e.response?.status === 429) handleOpenPaywall("scan_limit");
+      else {
+        setBarcodeError("Couldn't look up that barcode. Try searching by name.");
+        setTimeout(() => setBarcodeError(""), 5000);
+      }
     } finally {
       setLoading(false);
       stopLoading();
@@ -359,7 +365,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     return <FoodRating
       rating={currentRating}
       onBack={() => { setCurrentRating(null); loadRecentRatings(); loadStats(); }}
-      onOpenPaywall={() => handleOpenPaywall()}
+      onOpenPaywall={(entry) => handleOpenPaywall(entry)}
       onRateFood={(name) => { setCurrentRating(null); rateFood(name); }}
     />;
   }
@@ -551,6 +557,18 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           <ChevronRight size={16} color="#534AB7" />
         </motion.button>
 
+        {/* Barcode error banner */}
+        <AnimatePresence>
+          {barcodeError && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <p style={{ fontSize: 13, color: "#A32D2D", margin: 0, flex: 1 }}>{barcodeError}</p>
+              <button onClick={() => setBarcodeError("")} style={{ background: "none", border: "none", color: "#A32D2D", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Search Bar */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -680,7 +698,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                     </div>
                     <div>
                       <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{entry.food_name || entry.name}</p>
-                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{entry.verdict?.slice(0, 40)}...</p>
+                      <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0 }}>{entry.verdict && entry.verdict.length > 40 ? entry.verdict.slice(0, 40) + "…" : (entry.verdict || "")}</p>
                     </div>
                   </div>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", background: getScoreColor(entry.overall_score), display: "flex", alignItems: "center", justifyContent: "center" }}>

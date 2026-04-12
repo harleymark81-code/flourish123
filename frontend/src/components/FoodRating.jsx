@@ -271,7 +271,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
   }, []);
   const verdict = getVerdict(rating.overallScore);
 
-  // Free: show naturalness + hormonal fully; inflammation + gut = pixelated
+  // Free: Overall score + Naturalness shown; Hormonal Impact, Inflammation, Gut Health locked
   // Free: show forYourCondition first 2 sentences, then blur
   const sentences = (rating.forYourCondition || "").split(/(?<=\.)\s+/);
   const freeInsight = sentences.slice(0, 2).join(" ");

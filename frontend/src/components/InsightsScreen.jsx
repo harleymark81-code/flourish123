@@ -61,6 +61,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
   const [cycleInfo, setCycleInfo] = useState(null);
   const [loadingBadges, setLoadingBadges] = useState(true);
   const [loadingReport, setLoadingReport] = useState(true);
+  const [badgesError, setBadgesError] = useState(false);
   const [activeSection, setActiveSection] = useState("progress");
   const isPremium = user?.is_premium;
 
@@ -77,6 +78,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
       setBadges(res.data);
     } catch (e) {
       console.error("[Flourish] InsightsScreen loadBadges error:", e);
+      setBadgesError(true);
     } finally {
       setLoadingBadges(false);
     }
@@ -257,6 +259,11 @@ export default function InsightsScreen({ onOpenPaywall }) {
               {loadingBadges ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
                   <Loader size={24} color="#534AB7" style={{ animation: "spin 1s linear infinite" }} />
+                </div>
+              ) : badgesError ? (
+                <div style={{ textAlign: "center", padding: 24 }}>
+                  <AlertCircle size={24} color="#A32D2D" style={{ marginBottom: 8 }} />
+                  <p style={{ fontSize: 14, color: "var(--text-secondary)", margin: 0 }}>Couldn't load badges. Pull to refresh.</p>
                 </div>
               ) : badges ? (
                 <div>

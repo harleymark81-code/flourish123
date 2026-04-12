@@ -30,6 +30,8 @@ export default function FoodDiary({ onOpenPaywall }) {
   const [noteEdit, setNoteEdit] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [noteSaveError, setNoteSaveError] = useState("");
   const [stats, setStats] = useState(null);
   const [diaryDates, setDiaryDates] = useState([]);
 
@@ -75,12 +77,15 @@ export default function FoodDiary({ onOpenPaywall }) {
       await axios.put(`${API}/diary/note`, { entry_id: entryId, note }, { headers: getHeaders(), withCredentials: true });
     } catch (e) {
       console.error("[Flourish] FoodDiary error:", e);
+      setNoteSaveError("Couldn't save note. Please try again.");
+      setTimeout(() => setNoteSaveError(""), 3000);
     }
   };
 
   const handleDelete = async (entryId) => {
     if (deleting) return;
     setDeleting(true);
+    setDeleteError("");
     try {
       await axios.delete(`${API}/diary/${entryId}`, { headers: getHeaders(), withCredentials: true });
       setEntries(prev => prev.filter(e => e.id !== entryId));
@@ -88,6 +93,7 @@ export default function FoodDiary({ onOpenPaywall }) {
       loadDiaryDates();
     } catch (e) {
       console.error("[Flourish] FoodDiary delete error:", e);
+      setDeleteError("Couldn't remove entry. Please try again.");
     } finally {
       setDeleting(false);
     }
@@ -212,6 +218,16 @@ export default function FoodDiary({ onOpenPaywall }) {
           </div>
         </div>
 
+        {/* Note-save error */}
+        <AnimatePresence>
+          {noteSaveError && (
+            <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{noteSaveError}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Entries */}
         <AnimatePresence>
           {filteredEntries.length === 0 ? (
@@ -275,8 +291,13 @@ export default function FoodDiary({ onOpenPaywall }) {
               style={{ background: "var(--bg-elevated)", borderRadius: 20, padding: 24, maxWidth: 320, width: "100%", textAlign: "center" }}>
               <p style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Remove from diary?</p>
               <p style={{ fontSize: 14, color: "var(--text-secondary)", marginBottom: 20 }}>This will permanently remove this entry.</p>
+              {deleteError && (
+                <div style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
+                  <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{deleteError}</p>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setConfirmDelete(null)} style={{ flex: 1, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px", fontWeight: 600, cursor: "pointer", color: "var(--text-secondary)", minHeight: 44 }}>Cancel</button>
+                <button onClick={() => { setConfirmDelete(null); setDeleteError(""); }} style={{ flex: 1, background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, padding: "12px", fontWeight: 600, cursor: "pointer", color: "var(--text-secondary)", minHeight: 44 }}>Cancel</button>
                 <button onClick={() => handleDelete(confirmDelete)} disabled={deleting} style={{ flex: 1, background: "#A32D2D", border: "none", borderRadius: 10, padding: "12px", fontWeight: 700, cursor: "pointer", color: "#fff", minHeight: 44, opacity: deleting ? 0.6 : 1 }}>Remove</button>
               </div>
             </motion.div>
