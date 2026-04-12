@@ -87,8 +87,9 @@ function ConfettiBurst() {
   );
 }
 
-export default function Paywall({ onClose, user, entryPoint = "default" }) {
-  const { getHeaders, API, refreshUser } = useAuth();
+export default function Paywall({ onClose, user: userProp, entryPoint = "default" }) {
+  const { getHeaders, API, refreshUser, user: authUser, loading: authLoading } = useAuth();
+  const user = authUser || userProp;
   const [plan, setPlan] = useState("annual");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,6 +110,10 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
   }, []);
 
   const handleSubscribe = async () => {
+    if (!user) {
+      setError("Please sign in to continue.");
+      return;
+    }
     ph.upgradeCTAClicked(plan);
     setLoading(true);
     setError("");
@@ -125,7 +130,13 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
         setError("Could not create checkout session. Please try again.");
       }
     } catch (e) {
-      const msg = e.response?.data?.detail || "Something went wrong. Let us try again.";
+      if (e.response?.status === 401) {
+        ph.apiError("/payments/checkout", "Not authenticated", 401);
+        setError("Your session has expired. Please sign in again.");
+        setTimeout(() => { onClose(); }, 2000);
+        return;
+      }
+      const msg = e.response?.data?.detail || "Something went wrong. Please try again.";
       ph.apiError("/payments/checkout", String(msg), e.response?.status);
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
@@ -314,18 +325,18 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
               data-testid="start-trial-btn"
               whileTap={{ scale: 0.96 }}
               onClick={handleSubscribe}
-              disabled={loading}
+              disabled={loading || authLoading || !user}
               style={{
                 width: "100%",
-                background: loading ? "#A09FAD" : "linear-gradient(135deg, #534AB7, #756AD9)",
+                background: (loading || authLoading || !user) ? "#A09FAD" : "linear-gradient(135deg, #534AB7, #756AD9)",
                 color: "#fff", border: "none", borderRadius: 14,
                 padding: "20px 24px", fontSize: 18, fontWeight: 800,
-                cursor: loading ? "not-allowed" : "pointer",
-                boxShadow: loading ? "none" : "0 6px 24px rgba(83,74,183,0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
+                cursor: (loading || authLoading || !user) ? "not-allowed" : "pointer",
+                boxShadow: (loading || authLoading || !user) ? "none" : "0 6px 24px rgba(83,74,183,0.35), inset 0 1px 0 rgba(255,255,255,0.2)",
                 marginBottom: 12, letterSpacing: "-0.01em",
                 minHeight: 60
               }}>
-              {loading ? "Creating your trial..." : "Start 3-Day Free Trial →"}
+              {authLoading ? "Checking your account..." : loading ? "Creating your trial..." : !user ? "Sign in to continue" : "Start 3-Day Free Trial →"}
             </motion.button>
 
             <button data-testid="maybe-later-btn" onClick={handleClose}
