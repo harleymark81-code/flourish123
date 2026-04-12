@@ -531,6 +531,14 @@ async def login(request: Request, data: LoginRequest):
     if not user or not verify_password(data.password, user.get("password_hash", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    # ── Debug: log the raw DB fields that control access ─────────────────────
+    logger.info(
+        f"[login] email={email} "
+        f"is_admin={user.get('is_admin')} "
+        f"is_premium={user.get('is_premium')} "
+        f"role={user.get('role')}"
+    )
+
     user_id = str(user["_id"])
     user["_id"] = user_id
     user.pop("password_hash", None)
@@ -563,14 +571,21 @@ async def login(request: Request, data: LoginRequest):
     user["last_active_date"] = today
 
     token_version = user.get("token_version", 0)
-    is_admin = user.get("is_admin", False)
+    is_admin = bool(user.get("is_admin", False))
+    logger.info(f"[login] minting token for {email} — is_admin={is_admin}")
     token = create_access_token(user_id, email, token_version=token_version, is_admin=is_admin)
     resp = JR(content={"user": user, "token": token})
+    # Note: auth is httpOnly cookie only — no localStorage token
     _set_auth_cookie(resp, token)
     return resp
 
 @api_router.get("/auth/me")
 async def me(current_user: dict = Depends(get_current_user)):
+    logger.info(
+        f"[/auth/me] email={current_user.get('email')} "
+        f"is_admin={current_user.get('is_admin')} "
+        f"is_premium={current_user.get('is_premium')}"
+    )
     return current_user
 
 @api_router.post("/auth/logout")
