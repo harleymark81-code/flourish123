@@ -203,6 +203,7 @@ async def lifespan(app: FastAPI):
             "password_hash": hash_password(admin_password),
             "name": "Admin",
             "role": "admin",
+            "is_admin": True,
             "conditions": [],
             "goals": [],
             "onboarding_completed": True,
@@ -216,6 +217,19 @@ async def lifespan(app: FastAPI):
             {"email": admin_email},
             {"$set": {"password_hash": hash_password(admin_password)}}
         )
+
+    # ── Grant is_admin to the owner account ───────────────────────────────────
+    OWNER_EMAIL = "theflourishfoodapp@gmail.com"
+    owner = await db.users.find_one({"email": OWNER_EMAIL})
+    if owner:
+        if not owner.get("is_admin"):
+            await db.users.update_one(
+                {"email": OWNER_EMAIL},
+                {"$set": {"is_admin": True, "role": "admin"}}
+            )
+            logger.info(f"Granted is_admin to owner account: {OWNER_EMAIL}")
+    else:
+        logger.warning(f"Owner account not found at startup: {OWNER_EMAIL}")
 
     yield
 
@@ -302,11 +316,12 @@ def verify_password(plain: str, hashed: str) -> bool:
 def get_jwt_secret() -> str:
     return os.environ["JWT_SECRET"]
 
-def create_access_token(user_id: str, email: str, token_version: int = 0) -> str:
+def create_access_token(user_id: str, email: str, token_version: int = 0, is_admin: bool = False) -> str:
     payload = {
         "sub": user_id,
         "email": email,
         "token_version": token_version,
+        "is_admin": is_admin,
         "exp": datetime.now(timezone.utc) + timedelta(days=7),
         "type": "access"
     }
@@ -343,6 +358,13 @@ async def get_optional_user(request: Request):
         return await get_current_user(request)
     except (HTTPException, jwt.InvalidTokenError):
         return None
+
+async def require_admin_user(request: Request):
+    """Dependency: requires a valid session cookie AND is_admin: true on the user."""
+    user = await get_current_user(request)
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 # ── Pydantic Models ────────────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
@@ -460,6 +482,7 @@ async def register(request: Request, data: RegisterRequest):
         "password_hash": hash_password(data.password),
         "name": data.name or email.split("@")[0],
         "role": "user",
+        "is_admin": False,
         "conditions": [],
         "goals": [],
         "managing_duration": "",
@@ -494,7 +517,7 @@ async def register(request: Request, data: RegisterRequest):
             {"$inc": {"signups": 1}}
         )
 
-    token = create_access_token(str(result.inserted_id), email, token_version=0)
+    token = create_access_token(str(result.inserted_id), email, token_version=0, is_admin=False)
     resp = JR(content={"user": user_doc, "token": token})
     _set_auth_cookie(resp, token)
     logger.info(f"[register] success for {email} id={result.inserted_id}")
@@ -541,7 +564,8 @@ async def login(request: Request, data: LoginRequest):
     user["last_active_date"] = today
 
     token_version = user.get("token_version", 0)
-    token = create_access_token(user_id, email, token_version=token_version)
+    is_admin = user.get("is_admin", False)
+    token = create_access_token(user_id, email, token_version=token_version, is_admin=is_admin)
     resp = JR(content={"user": user, "token": token})
     _set_auth_cookie(resp, token)
     return resp
@@ -1383,8 +1407,15 @@ async def admin_stats(request: Request):
 
 @api_router.get("/admin/users")
 async def admin_users(request: Request):
-    _verify_admin(request)
-    users = await db.users.find({"role": {"$ne": "admin"}}, {"password_hash": 0}).sort("created_at", -1).to_list(500)
+    # Accept either X-Admin-Token (dashboard) or cookie session with is_admin: true
+    x_admin_token = request.headers.get("X-Admin-Token", "")
+    if x_admin_token:
+        _verify_admin(request)
+    else:
+        user = await get_optional_user(request)
+        if not user or not user.get("is_admin"):
+            raise HTTPException(status_code=403, detail="Admin access required")
+    users = await db.users.find({}, {"password_hash": 0}).sort("created_at", -1).to_list(500)
     return {"users": [doc_to_dict(u) for u in users]}
 
 @api_router.get("/admin/transactions")
