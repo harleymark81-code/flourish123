@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { X, Zap, Brain, Sun, Smile, Star, Moon, Leaf, Flame } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 const SYMPTOM_ITEMS = [
   { key: "energy",    label: "Energy",     icon: <Zap size={20} />,   color: "#F59E0B" },
@@ -55,6 +56,7 @@ export default function SymptomTracker({ onClose }) {
     setSaveError(false);
     try {
       await axios.post(`${API}/symptoms`, scores, { headers: getHeaders(), withCredentials: true });
+      ph.symptomCheckinCompleted(scores);
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 1500);
     } catch (e) {

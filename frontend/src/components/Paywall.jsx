@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Crown, Check, Star, ChevronDown, ChevronUp } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 const PAYWALL_HEADLINES = {
   pcos: "Stop guessing what to eat for your PCOS. Start knowing.",
@@ -108,6 +109,7 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
   }, []);
 
   const handleSubscribe = async () => {
+    ph.upgradeCTAClicked(plan);
     setLoading(true);
     setError("");
     try {
@@ -117,12 +119,14 @@ export default function Paywall({ onClose, user, entryPoint = "default" }) {
       }, { headers: getHeaders(), withCredentials: true });
 
       if (res.data.url) {
+        ph.freeTrialStarted(plan);
         window.location.href = res.data.url;
       } else {
         setError("Could not create checkout session. Please try again.");
       }
     } catch (e) {
       const msg = e.response?.data?.detail || "Something went wrong. Let us try again.";
+      ph.apiError("/payments/checkout", String(msg), e.response?.status);
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setLoading(false);

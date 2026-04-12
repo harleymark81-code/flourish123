@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BarChart2, Flame, Award, TrendingUp, Heart, ChevronRight, Loader, AlertCircle } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 const PHASE_INFO = {
   menstrual:  { label: "Menstrual",  color: "#A32D2D", bg: "rgba(163,45,45,0.1)",  tip: "Focus on iron-rich foods like leafy greens and lentils. Rest and gentle nourishment are key." },
@@ -66,6 +67,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
   const isPremium = user?.is_premium;
 
   useEffect(() => {
+    if (isPremium) ph.insightsViewed();
     loadBadges();
     loadWeeklyReport();
     loadCycle();
@@ -193,7 +195,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
             <motion.button
               key={s.id}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveSection(s.id)}
+              onClick={() => { setActiveSection(s.id); ph.insightsSectionChanged(s.id); }}
               style={{
                 background: activeSection === s.id ? "#534AB7" : "var(--bg-elevated)",
                 color: activeSection === s.id ? "#fff" : "var(--text-secondary)",

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
+import { identifyUser, resetUser, ph } from "../lib/posthog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";
 const API = BACKEND_URL + "/api";
@@ -20,7 +21,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     axios.get(`${API}/auth/me`)
-      .then(res => setUser(res.data))
+      .then(res => { setUser(res.data); identifyUser(res.data); })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
   }, []);
@@ -39,6 +40,8 @@ export function AuthProvider({ children }) {
     });
     const { user: u } = res.data;
     setUser(u);
+    identifyUser(u);
+    ph.userSignedUp(u);
     // Signup notification email — EmailJS v4 API uses { publicKey } object
     try {
       const emailjs = await import("@emailjs/browser");
@@ -66,10 +69,14 @@ export function AuthProvider({ children }) {
     );
     const { user: u } = res.data;
     setUser(u);
+    identifyUser(u);
+    ph.userLoggedIn();
     return u;
   };
 
   const logout = async () => {
+    ph.userLoggedOut();
+    resetUser();
     await axios.post(`${API}/auth/logout`, {}).catch(() => {});
     setUser(null);
   };

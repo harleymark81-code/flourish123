@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Droplets, Shield, Leaf, Flower2, Activity, Zap } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 import axios from "axios";
 
 const CONDITIONS = [
@@ -51,12 +52,19 @@ export default function Onboarding({ onComplete }) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const stepNames = { 1: "welcome", 2: "conditions", 3: "goals", 4: "context", 5: "final" };
+    ph.onboardingStepViewed(stepNames[screen] || `step_${screen}`, screen);
+  }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const progress = (screen / 5) * 100;
 
   const toggleCondition = (id) => {
-    setSelectedConditions(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    );
+    setSelectedConditions(prev => {
+      const next = prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id];
+      if (!prev.includes(id)) ph.conditionSelected(id);
+      return next;
+    });
   };
 
   const toggleGoalFixed = (id) => {
@@ -77,6 +85,7 @@ export default function Onboarding({ onComplete }) {
         severity: severity.toLowerCase(),
         onboarding_completed: true
       });
+      ph.onboardingCompleted(selectedConditions, selectedGoals);
       onComplete();
     } catch (e) {
       console.error(e);

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, RefreshCw, Lock, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 function getScoreColor(s) {
   if (s >= 70) return "#639922";
@@ -121,7 +122,7 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
                     </div>
                     <motion.button
                       whileTap={{ scale: 0.9 }}
-                      onClick={() => { onClose(); onRateFood(meal.name); }}
+                      onClick={() => { ph.mealPlannerMealRated(meal.name); onClose(); onRateFood(meal.name); }}
                       style={{ background: "none", border: "none", cursor: "pointer" }}>
                       <ChevronRight size={16} color="#534AB7" />
                     </motion.button>

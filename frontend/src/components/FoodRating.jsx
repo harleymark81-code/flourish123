@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Share2, BookmarkPlus, Check, Lock, ChevronRight, Bell, X, Heart, ChevronDown } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 const BODY_SYSTEMS = ["Hormones", "Gut", "Immune", "Thyroid", "Energy"];
 const SYSTEM_COLORS = { Hormones: "#534AB7", Gut: "#639922", Immune: "#BA7517", Thyroid: "#756AD9", Energy: "#F59E0B" };
@@ -199,7 +200,7 @@ function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock
           {why && (
             <div>
               <button
-                onClick={() => setShowWhy(v => !v)}
+                onClick={() => { setShowWhy(v => !v); if (!showWhy) ph.ingredientDetailExpanded("", label); }}
                 style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#534AB7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", marginTop: 2 }}>
                 Why this score?
                 <ChevronDown size={11} style={{ transform: showWhy ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
@@ -250,6 +251,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
         rating_data: { overallScore: rating.overallScore, dimensions: rating.dimensions }
       }, { headers: getHeaders(), withCredentials: true });
       setIsFavourite(res.data.saved);
+      ph.favouriteToggled(foodName, res.data.saved);
     } catch (e) {
       if (e.response?.status === 403) {
         onOpenPaywall && onOpenPaywall("favourites");
@@ -293,10 +295,14 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
         barcode: rating.barcode
       }, { headers: getHeaders(), withCredentials: true });
       setLogged(true);
+      ph.ratingSaved(rating.food_name || rating.name, rating.overallScore);
+      ph.diaryEntryAdded(rating.food_name || rating.name, rating.overallScore);
     } catch (e) {
       if (e.response?.status === 403) {
+        ph.diaryLockedHit();
         onOpenPaywall && onOpenPaywall("diary");
       } else {
+        ph.apiError("/diary/log", e.message, e.response?.status);
         console.error("[Flourish] handleLog error:", e);
       }
       return;
@@ -314,6 +320,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
   };
 
   const handleShare = async () => {
+    ph.ratingShared(foodName, rating.overallScore);
     const text = `I just rated ${foodName} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://theflourishapp.netlify.app`;
     if (navigator.share) {
       await navigator.share({ title: "Flourish Food Rating", text }).catch(() => {});
@@ -533,7 +540,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
                   <motion.button
                     key={i}
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => onRateFood ? onRateFood(alt.name) : null}
+                    onClick={() => { ph.recommendationClicked(foodName, alt.name); if (onRateFood) onRateFood(alt.name); }}
                     style={{
                       background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)",
                       display: "flex", alignItems: "center", justifyContent: "space-between",

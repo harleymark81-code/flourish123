@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import { ph } from "../lib/posthog";
 
 export default function BarcodeScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
@@ -113,13 +114,14 @@ export default function BarcodeScanner({ onResult, onClose }) {
               data-testid="manual-barcode-input"
               value={manualBarcode}
               onChange={e => setManualBarcode(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && manualBarcode.trim()) { stopCamera(); onResult(manualBarcode.trim()); } }}
+              onKeyDown={e => { if (e.key === "Enter" && manualBarcode.trim()) { ph.manualFoodEntryStarted(manualBarcode.trim()); stopCamera(); onResult(manualBarcode.trim()); } }}
+            onFocus={() => ph.manualFoodEntryStarted("")}
               placeholder="Enter barcode number..."
               style={{ flex: 1, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 10, padding: "12px 14px", color: "#fff", fontSize: 15, outline: "none" }}
             />
             <button
               data-testid="manual-barcode-submit"
-              onClick={() => { if (manualBarcode.trim()) { stopCamera(); onResult(manualBarcode.trim()); } }}
+              onClick={() => { if (manualBarcode.trim()) { ph.manualFoodEntryStarted(manualBarcode.trim()); stopCamera(); onResult(manualBarcode.trim()); } }}
               style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px", cursor: "pointer", fontWeight: 600 }}>
               Scan
             </button>

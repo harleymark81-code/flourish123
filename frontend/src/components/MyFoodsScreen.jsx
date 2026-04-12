@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Heart, ShoppingCart, Clock, Plus, Trash2, Check, X, Loader, Search } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 function getScoreColor(score) {
   if (score >= 70) return "#639922";
@@ -93,9 +94,11 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
     try {
       const res = await axios.post(`${API}/shopping-list/add`, { name: newItem.trim() }, { headers: getHeaders(), withCredentials: true });
       setShoppingList(prev => [...prev, res.data.item]);
+      ph.shoppingItemAdded(newItem.trim());
       setNewItem("");
     } catch (e) {
       console.error("[Flourish] addShoppingItem error:", e);
+      ph.apiError("/shopping-list/add", e.message, e.response?.status);
       setActionError("Couldn't add item. Please try again.");
       setTimeout(() => setActionError(""), 3000);
     } finally {
@@ -163,7 +166,7 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
             <motion.button
               key={t.id}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setActiveTab(t.id)}
+              onClick={() => { setActiveTab(t.id); ph.myFoodsTabChanged(t.id); }}
               style={{
                 display: "flex", alignItems: "center", gap: 5,
                 background: activeTab === t.id ? "#534AB7" : "var(--bg-elevated)",
@@ -288,7 +291,7 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
                       </div>
                       <motion.button
                         whileTap={{ scale: 0.9 }}
-                        onClick={() => onRateFood && onRateFood(entry.food_name)}
+                        onClick={() => { ph.historyItemRerated(entry.food_name); onRateFood && onRateFood(entry.food_name); }}
                         style={{ background: "rgba(83,74,183,0.1)", border: "none", borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#534AB7" }}>
                         Rate again
                       </motion.button>

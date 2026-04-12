@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 function formatApiError(detail) {
   if (!detail) return "Something went wrong. Let us try again.";
@@ -28,6 +29,7 @@ export default function AuthScreen() {
     try {
       if (mode === "forgot") {
         await axios.post(`${API}/auth/forgot-password`, { email });
+        ph.passwordResetRequested();
         setForgotSent(true);
       } else if (mode === "login") {
         await login(email, password);

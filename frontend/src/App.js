@@ -20,6 +20,7 @@ import ResetPassword from "./components/ResetPassword";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
+import { ph } from "./lib/posthog";
 
 function ConfettiBurst() {
   const pieces = Array.from({ length: 50 }, (_, i) => ({
@@ -120,6 +121,8 @@ function AppContent() {
   const openPaywall = (entryPoint = "default") => {
     setPaywallEntry(entryPoint);
     setShowPaywall(true);
+    ph.paywallHit(entryPoint);
+    ph.upgradeModalViewed(entryPoint);
   };
 
   useEffect(() => {
@@ -263,7 +266,7 @@ function AppContent() {
           { id: "profile",  icon: <User size={21} />,        label: "Profile"  },
         ].map(tab => (
           <motion.button key={tab.id} data-testid={`nav-${tab.id}`} whileTap={{ scale: 0.88 }}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => { setActiveTab(tab.id); ph.tabChanged(tab.id); }}
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "4px 10px", position: "relative", zIndex: 9001, minHeight: 44, flex: 1 }}>
             <div style={{ color: activeTab === tab.id ? "#534AB7" : "var(--text-muted)" }}>{tab.icon}</div>
             <span style={{ fontSize: 10, fontWeight: 600, color: activeTab === tab.id ? "#534AB7" : "var(--text-muted)" }}>{tab.label}</span>

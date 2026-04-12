@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Crown, Flame, ChevronRight, Star, Heart } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 import FoodRating from "./FoodRating";
 import BarcodeScanner from "./BarcodeScanner";
 import MealPlanner from "./MealPlanner";
@@ -302,7 +303,10 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       setCurrentRating(res.data);
     } catch (e) {
       if (e.response?.status === 429) {
+        ph.scanLimitReached();
         handleOpenPaywall("scan_limit");
+      } else {
+        ph.apiError("/food/rate", e.message, e.response?.status);
       }
     } finally {
       setLoading(false);
@@ -316,6 +320,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       setTimeout(() => setInputShake(false), 500);
       return;
     }
+    ph.foodSearched(searchQuery);
     rateFood(searchQuery);
   };
 
@@ -327,6 +332,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       const lookupRes = await axios.get(`${API}/food/barcode/${barcode}`, { headers: getHeaders() });
       if (lookupRes.data.found) {
         const { name, ingredients, image_url } = lookupRes.data;
+        ph.barcodeScanned(name, barcode);
         const ratingRes = await axios.post(`${API}/food/rate`, {
           food_name: name,
           ingredients,
@@ -335,12 +341,18 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         }, { headers: getHeaders(), withCredentials: true });
         setCurrentRating(ratingRes.data);
       } else {
+        ph.barcodeScanFailed("product_not_found");
+        ph.foodNotFound(barcode);
         setBarcodeError(lookupRes.data.message || "Product not found. Try searching by name.");
         setTimeout(() => setBarcodeError(""), 5000);
       }
     } catch (e) {
-      if (e.response?.status === 429) handleOpenPaywall("scan_limit");
-      else {
+      if (e.response?.status === 429) {
+        ph.scanLimitReached();
+        handleOpenPaywall("scan_limit");
+      } else {
+        ph.barcodeScanFailed("network_error");
+        ph.apiError("/food/barcode", e.message, e.response?.status);
         setBarcodeError("Couldn't look up that barcode. Try searching by name.");
         setTimeout(() => setBarcodeError(""), 5000);
       }
@@ -362,6 +374,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   };
 
   if (currentRating) {
+    ph.ratingViewed(currentRating);
     return <FoodRating
       rating={currentRating}
       onBack={() => { setCurrentRating(null); loadRecentRatings(); loadStats(); }}
@@ -550,7 +563,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1, type: "spring" }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => setShowMealPlanner(true)}
+          onClick={() => { setShowMealPlanner(true); ph.mealPlannerOpened(); }}
           style={{ width: "100%", background: "var(--bg-card)", border: "2px dashed #534AB7", borderRadius: 12, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20 }}>
           <span style={{ fontSize: 20 }}>🍽️</span>
           <span style={{ fontSize: 15, fontWeight: 600, color: "#534AB7" }}>What should I eat today?</span>
@@ -600,7 +613,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           <motion.button
             data-testid="scan-btn"
             whileTap={{ scale: 0.95 }}
-            onClick={() => setShowScanner(true)}
+            onClick={() => { setShowScanner(true); ph.barcodeScannerOpened(); }}
             style={{ background: "var(--bg-card)", border: "2px solid var(--border)", borderRadius: 12, padding: "14px 12px", cursor: "pointer" }}>
             <Camera size={20} color="#534AB7" />
           </motion.button>
@@ -648,7 +661,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1, transition: { delay: i * 0.04 } }}
                 whileTap={{ scale: 0.93 }}
-                onClick={() => rateFood(food.name)}
+                onClick={() => { ph.quickPickClicked(food.name); rateFood(food.name); }}
                 style={{
                   flexShrink: 0, background: "var(--bg-card)", border: "1px solid var(--border)",
                   borderRadius: 12, padding: "10px 14px", cursor: "pointer",
@@ -668,7 +681,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.17, type: "spring" }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => user?.is_premium ? setShowSymptoms(true) : onOpenPaywall("symptoms")}
+          onClick={() => { if (user?.is_premium) { setShowSymptoms(true); ph.symptomCheckinOpened(); } else { onOpenPaywall("symptoms"); } }}
           style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
           <Heart size={16} color="#534AB7" />
           <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>

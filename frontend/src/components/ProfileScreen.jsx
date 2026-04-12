@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, CalendarDays, ChevronDown } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 const PHASE_INFO = {
   menstrual:  { label: "Menstrual",  color: "#A32D2D", bg: "rgba(163,45,45,0.08)",  emoji: "🌑", tip: "Rest and nourish. Iron-rich foods like lentils and leafy greens support you now." },
@@ -218,7 +219,8 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   useEffect(() => {
     loadStats();
     loadReferralStats();
-  }, []);
+    ph.profileViewed();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadStats = async () => {
     try {
@@ -241,6 +243,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   const handleCopyReferral = async () => {
     if (referralStats?.referral_link) {
       await navigator.clipboard.writeText(referralStats.referral_link).catch(() => {});
+      ph.referralLinkCopied();
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -248,6 +251,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
 
   const handleShareReferral = async () => {
     if (referralStats?.referral_link) {
+      ph.referralLinkShared();
       if (navigator.share) {
         await navigator.share({ title: "Join Flourish", text: "I've been using Flourish to understand how food affects my health. Try it free!", url: referralStats.referral_link }).catch(() => {});
       } else {
@@ -257,6 +261,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
   };
 
   const handleManageSubscription = async () => {
+    ph.manageSubscriptionClicked();
     setPortalLoading(true);
     setPortalError("");
     try {
@@ -275,6 +280,7 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
     setDeleteError("");
     try {
       await axios.delete(`${API}/auth/account`, { headers: getHeaders(), withCredentials: true });
+      ph.userDeletedAccount();
       logout();
     } catch (e) {
       console.error("[Flourish] deleteAccount error:", e);

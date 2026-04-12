@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Flame, Trash2, ChevronLeft, ChevronRight, Lock, BookOpen } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
+import { ph } from "../lib/posthog";
 
 function getScoreColor(s) {
   if (s >= 70) return "#639922";
@@ -87,7 +88,9 @@ export default function FoodDiary({ onOpenPaywall }) {
     setDeleting(true);
     setDeleteError("");
     try {
+      const entry = entries.find(e => e.id === entryId);
       await axios.delete(`${API}/diary/${entryId}`, { headers: getHeaders(), withCredentials: true });
+      ph.diaryEntryDeleted(entry?.food_name || entry?.name || "");
       setEntries(prev => prev.filter(e => e.id !== entryId));
       setConfirmDelete(null);
       loadDiaryDates();
@@ -110,7 +113,7 @@ export default function FoodDiary({ onOpenPaywall }) {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + dir);
     const newDate = d.toISOString().split("T")[0];
-    if (newDate <= today) setSelectedDate(newDate);
+    if (newDate <= today) { setSelectedDate(newDate); ph.diaryDateChanged(newDate); }
   };
 
   const monthlyStats = (() => {
@@ -122,8 +125,14 @@ export default function FoodDiary({ onOpenPaywall }) {
     return { avg, best, worst };
   })();
 
+  // Track diary open once for premium users (effect runs when isPremium becomes true)
+  useEffect(() => {
+    if (isPremium) ph.diaryOpened();
+  }, [isPremium]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Free user premium gate — AFTER all hooks
   if (!isPremium) {
+    ph.diaryLockedHit();
     return (
       <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: 80 }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: "center" }}>
