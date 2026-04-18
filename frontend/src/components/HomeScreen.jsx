@@ -10,6 +10,7 @@ import MealPlanner from "./MealPlanner";
 import Paywall from "./Paywall";
 import SymptomTracker from "./SymptomTracker";
 import SubscriptionScreen from "./SubscriptionScreen";
+import RatingHistory from "./RatingHistory";
 
 // Condition-specific food banks — randomised on each session
 const FOOD_BANK = {
@@ -158,6 +159,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   const [showPaywallLocal, setShowPaywallLocal] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [nudgeMsg, setNudgeMsg] = useState(null);
   const [barcodeError, setBarcodeError] = useState("");
@@ -234,7 +236,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   const loadRecentRatings = async () => {
     try {
       const res = await axios.get(`${API}/diary`, { headers: getHeaders(), withCredentials: true });
-      setRecentRatings((res.data.entries || []).slice(0, 3));
+      setRecentRatings(res.data.entries || []);
     } catch (e) {
       console.error("[Flourish] HomeScreen loadRecentRatings error:", e);
     }
@@ -735,6 +737,13 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                 </motion.div>
               ))}
             </div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowHistory(true)}
+              style={{ marginTop: 10, width: "100%", background: "none", border: "1.5px solid var(--border)", borderRadius: 10, padding: "11px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>View all ratings</span>
+              <ChevronRight size={14} color="var(--text-muted)" />
+            </motion.button>
           </motion.div>
         )}
       </div>
@@ -746,6 +755,12 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
         {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
         {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => { setShowSubscription(false); handleOpenPaywall(); }} />}
+        {showHistory && (
+          <RatingHistory
+            onClose={() => setShowHistory(false)}
+            onOpenRating={(entry) => { setShowHistory(false); openRecentRating(entry); }}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
