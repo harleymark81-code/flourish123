@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 
-const API = process.env.REACT_APP_BACKEND_URL + "/api";
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";
+const API = BACKEND_URL + "/api";
 
 export default function AffiliateApplication() {
   const [formData, setFormData] = useState({
@@ -31,7 +32,7 @@ export default function AffiliateApplication() {
     try {
       await axios.post(`${API}/affiliate/apply`, formData);
 
-      // EmailJS notification
+      // EmailJS notification — fire and forget
       try {
         const emailjs = await import("@emailjs/browser");
         await emailjs.default.send(
@@ -43,21 +44,22 @@ export default function AffiliateApplication() {
             details: `Name: ${formData.name} | Social: ${formData.social_handles} | Audience: ${formData.audience_size} | Niche: ${formData.condition_niche} | Bio: ${formData.description}`,
             time: new Date().toLocaleString("en-GB")
           },
-          process.env.REACT_APP_EMAILJS_PUBLIC_KEY
+          { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY }
         );
       } catch (emailErr) {
         console.warn("EmailJS error:", emailErr);
       }
 
       setSuccess(true);
-    } catch (e) {
-      if (e.response?.data?.detail) {
-        setErrors({ submit: e.response.data.detail });
+    } catch (err) {
+      if (err.response?.data?.detail) {
+        setErrors({ submit: err.response.data.detail });
       } else {
-        setErrors({ submit: "Something went wrong. Let us try again." });
+        setErrors({ submit: "Something went wrong. Please try again." });
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fields = [
@@ -75,8 +77,8 @@ export default function AffiliateApplication() {
           style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(99,153,34,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
           <span style={{ fontSize: 40 }}>✓</span>
         </motion.div>
-        <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Application submitted!</h2>
-        <p style={{ fontSize: 16, color: "var(--text-secondary)" }}>Your application has been submitted. We will be in touch within 48 hours.</p>
+        <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Application received!</h2>
+        <p style={{ fontSize: 16, color: "var(--text-secondary)" }}>We'll be in touch within 48 hours.</p>
         <button onClick={() => window.location.href = "/"} style={{ marginTop: 20, background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "14px 28px", fontWeight: 600, cursor: "pointer" }}>
           Back to Flourish
         </button>
@@ -101,7 +103,7 @@ export default function AffiliateApplication() {
           {[
             ["30%", "Commission rate"],
             ["£3.90", "Per monthly referral"],
-            ["£25.50", "Per annual referral"],
+            ["£14.99", "Per annual referral"],
             ["Monthly", "Payouts"],
           ].map(([val, label]) => (
             <div key={label} style={{ textAlign: "center" }}>
