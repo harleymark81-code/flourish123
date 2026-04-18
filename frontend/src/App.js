@@ -127,6 +127,11 @@ function AppContent() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    // Persist referral code to sessionStorage before any URL rewrite, so it
+    // survives navigation or component re-mounts before the user signs up.
+    const ref = params.get("ref");
+    if (ref) sessionStorage.setItem("fl_ref", ref);
+
     if (params.get("upgraded") === "true") {
       setShowUpgradedModal(true);
       setShowConfetti(true);

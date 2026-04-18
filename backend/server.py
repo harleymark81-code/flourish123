@@ -1248,13 +1248,34 @@ async def stripe_webhook(request: Request):
                                 name=upgraded_user.get("name", ""),
                                 plan=plan,
                             ))
-                        # Referral reward email — notify referrer if this checkout had a referral code
+                        # Referral reward — find referrer and extend their premium by 30 days
                         if referral_code:
                             referrer = await db.users.find_one(
                                 {"referral_code": referral_code},
-                                {"email": 1, "name": 1}
+                                {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "is_premium": 1}
                             )
-                            if referrer and referrer.get("email") != upgraded_user.get("email"):
+                            if referrer and referrer.get("email") != (upgraded_user or {}).get("email"):
+                                # Extend premium: add 30 days from current expiry or from now
+                                current_expiry = referrer.get("premium_expires_at")
+                                try:
+                                    base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
+                                    # Ensure base is timezone-aware
+                                    if base.tzinfo is None:
+                                        base = base.replace(tzinfo=timezone.utc)
+                                    # Never extend from the past — start from now if already expired
+                                    if base < datetime.now(timezone.utc):
+                                        base = datetime.now(timezone.utc)
+                                    new_expiry = (base + timedelta(days=30)).isoformat()
+                                except Exception:
+                                    new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                                await db.users.update_one(
+                                    {"_id": referrer["_id"]},
+                                    {"$set": {
+                                        "is_premium": True,
+                                        "premium_expires_at": new_expiry,
+                                    }}
+                                )
+                                logger.info(f"Referral reward: extended {referrer.get('email')} premium to {new_expiry}")
                                 asyncio.create_task(send_referral_reward_email(
                                     to=referrer.get("email", ""),
                                     referrer_name=referrer.get("name", ""),
@@ -1384,8 +1405,18 @@ async def create_portal_session(current_user: dict = Depends(get_current_user)):
 # ── REFERRAL ───────────────────────────────────────────────────────────────────
 @api_router.get("/referral/stats")
 async def get_referral_stats(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
     referral_code = current_user.get("referral_code", "")
     frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.netlify.app")
+
+    # Older accounts may have been created before the referral_code field was
+    # added — generate one lazily and persist it so the link always works.
+    if not referral_code:
+        referral_code = str(uuid.uuid4())[:8].upper()
+        await db.users.update_one(
+            {"_id": ObjectId(uid)},
+            {"$set": {"referral_code": referral_code}}
+        )
 
     monthly_refs = await db.payment_transactions.count_documents({
         "referral_code": referral_code, "payment_status": "paid", "plan": "monthly"
