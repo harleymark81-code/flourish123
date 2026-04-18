@@ -4,10 +4,9 @@ import { identifyUser, resetUser, ph } from "../lib/posthog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://flourish123-production.up.railway.app";
 const API = BACKEND_URL + "/api";
+const TOKEN_KEY = "fl_token";
 
 // ── Global axios defaults ─────────────────────────────────────────────────────
-// withCredentials must be true globally so the httpOnly auth cookie is included
-// on every request — setting it per-call is error-prone and easy to miss.
 axios.defaults.withCredentials = true;
 
 export const AuthContext = createContext(null);
@@ -16,18 +15,27 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Auth is handled via httpOnly cookie — no token in localStorage/headers.
-  const getHeaders = () => ({});
+  // Returns Authorization header when a stored token exists.
+  const getHeaders = () => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
 
   useEffect(() => {
-    axios.get(`${API}/auth/me`)
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    axios.get(`${API}/auth/me`, { headers })
       .then(res => {
         console.log("[Flourish] /auth/me response:", res.data);
         console.log("[Flourish] is_admin:", res.data?.is_admin, "| is_premium:", res.data?.is_premium);
         setUser(res.data);
         identifyUser(res.data);
       })
-      .catch(() => setUser(null))
+      .catch(() => {
+        // Token invalid or expired — clear it so the user sees sign-in
+        localStorage.removeItem(TOKEN_KEY);
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -43,7 +51,8 @@ export function AuthProvider({ children }) {
     const res = await axios.post(`${API}/auth/register`, payload, {
       headers: { "Content-Type": "application/json" },
     });
-    const { user: u } = res.data;
+    const { user: u, token } = res.data;
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     setUser(u);
     identifyUser(u);
     ph.userSignedUp(u);
@@ -72,7 +81,8 @@ export function AuthProvider({ children }) {
       { email: email.trim().toLowerCase(), password },
       { headers: { "Content-Type": "application/json" } }
     );
-    const { user: u } = res.data;
+    const { user: u, token } = res.data;
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     console.log("[Flourish] login response user:", u);
     console.log("[Flourish] is_admin:", u?.is_admin, "| is_premium:", u?.is_premium);
     setUser(u);
@@ -84,13 +94,14 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     ph.userLoggedOut();
     resetUser();
-    await axios.post(`${API}/auth/logout`, {}).catch(() => {});
+    await axios.post(`${API}/auth/logout`, {}, { headers: getHeaders() }).catch(() => {});
+    localStorage.removeItem(TOKEN_KEY);
     setUser(null);
   };
 
   const refreshUser = async () => {
     try {
-      const res = await axios.get(`${API}/auth/me`);
+      const res = await axios.get(`${API}/auth/me`, { headers: getHeaders() });
       setUser(res.data);
     } catch (e) {
       console.error("[Flourish] refreshUser failed:", e);
