@@ -161,6 +161,9 @@ async def lifespan(app: FastAPI):
     await db.barcode_cache.create_index("cached_at", expireAfterSeconds=86400)
     await db.diary.create_index([("user_id", 1), ("date", -1)])
     await db.diary.create_index("scan_id", unique=True, sparse=True)
+    # Referral indexes — used by webhook lookup and stats queries
+    await db.users.create_index("referral_code", sparse=True)
+    await db.payment_transactions.create_index("referral_code", sparse=True)
 
     # ── Weekly report cron ──
     _scheduler.add_job(
@@ -489,8 +492,10 @@ async def register(request: Request, data: RegisterRequest):
     user_doc["_id"] = str(result.inserted_id)
     user_doc.pop("password_hash", None)
 
-    # If registered via an affiliate link, increment their signup counter
+    # Track referral signup
     if data.referred_by:
+        logger.info(f"[register] referred_by={data.referred_by} for new user {email}")
+        # Increment affiliate signup counter if the code belongs to an affiliate
         await db.affiliate_applications.update_one(
             {"affiliate_code": data.referred_by},
             {"$inc": {"signups": 1}}

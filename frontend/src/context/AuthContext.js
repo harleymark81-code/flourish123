@@ -40,10 +40,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const register = async (email, password, name) => {
-    // Read referral code from URL param first, then fall back to sessionStorage
-    // (sessionStorage is set by App.js on landing so it survives navigation).
+    // Read referral code: URL param takes priority, then localStorage
+    // (localStorage is set by App.js on landing and survives tab closes/refreshes).
     const ref = new URLSearchParams(window.location.search).get("ref")
-      || sessionStorage.getItem("fl_ref")
+      || localStorage.getItem("fl_ref")
       || "";
     // Build payload explicitly — no undefined values that could be mishandled
     const payload = {
@@ -57,7 +57,7 @@ export function AuthProvider({ children }) {
     });
     const { user: u, token } = res.data;
     if (token) localStorage.setItem(TOKEN_KEY, token);
-    sessionStorage.removeItem("fl_ref"); // consumed — clear it
+    localStorage.removeItem("fl_ref"); // consumed — clear so it doesn't affect future signups
     setUser(u);
     identifyUser(u);
     ph.userSignedUp(u);
