@@ -11,6 +11,7 @@ import Paywall from "./Paywall";
 import SymptomTracker from "./SymptomTracker";
 import SubscriptionScreen from "./SubscriptionScreen";
 import RatingHistory from "./RatingHistory";
+import BadgeToast from "./BadgeToast";
 
 // Condition-specific food banks — randomised on each session
 const FOOD_BANK = {
@@ -160,6 +161,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   const [showSymptoms, setShowSymptoms] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [badgeQueue, setBadgeQueue] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nudgeMsg, setNudgeMsg] = useState(null);
   const [barcodeError, setBarcodeError] = useState("");
@@ -195,6 +197,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     loadDailyTip();
     loadRecentRatings();
     checkStreakReward();
+    initBadgeBaseline();
     // Nudge banner for free users every 2–3 sessions
     if (!isPremium) {
       const count = parseInt(sessionStorage.getItem("fl_session_count") || "0", 10) + 1;
@@ -299,6 +302,37 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     });
   };
 
+  const BADGE_SEEN_KEY = "fl_seen_badges";
+
+  // On first app load, silently record which badges are already earned so we
+  // don't toast for badges the user earned in previous sessions.
+  const initBadgeBaseline = async () => {
+    try {
+      if (localStorage.getItem(BADGE_SEEN_KEY) !== null) return; // already initialised
+      const res = await axios.get(`${API}/badges`, { headers: getHeaders(), withCredentials: true });
+      const earnedIds = (res.data.badges || []).filter(b => b.earned).map(b => b.id);
+      localStorage.setItem(BADGE_SEEN_KEY, JSON.stringify(earnedIds));
+    } catch (e) { /* silent */ }
+  };
+
+  // Call after any action that could award a badge (food rating, barcode scan,
+  // symptom check-in). Fetches current badge state, diffs against the seen list,
+  // and queues a toast for each newly earned badge.
+  const checkBadges = async () => {
+    try {
+      const res = await axios.get(`${API}/badges`, { headers: getHeaders(), withCredentials: true });
+      const allBadges = res.data.badges || [];
+      const earned = allBadges.filter(b => b.earned);
+      const earnedIds = earned.map(b => b.id);
+      const seen = JSON.parse(localStorage.getItem(BADGE_SEEN_KEY) || "[]");
+      const newBadges = earned.filter(b => !seen.includes(b.id));
+      localStorage.setItem(BADGE_SEEN_KEY, JSON.stringify(earnedIds));
+      if (newBadges.length > 0) {
+        setBadgeQueue(q => [...q, ...newBadges]);
+      }
+    } catch (e) { /* silent */ }
+  };
+
   const rateFood = async (foodName, ingredients = "", barcode = "", productImage = "") => {
     if (!foodName.trim()) {
       setInputShake(true);
@@ -316,6 +350,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       }, { headers: getHeaders(), withCredentials: true });
       setCurrentRating(res.data);
       loadStats();
+      checkBadges();
     } catch (e) {
       if (e.response?.status === 429) {
         ph.scanLimitReached();
@@ -355,6 +390,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           product_image: image_url
         }, { headers: getHeaders(), withCredentials: true });
         setCurrentRating(ratingRes.data);
+        checkBadges();
       } else {
         ph.barcodeScanFailed("product_not_found");
         ph.foodNotFound(barcode);
@@ -748,12 +784,15 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         )}
       </div>
 
+      {/* Badge unlock toast — floats above everything */}
+      <BadgeToast badge={badgeQueue[0] || null} onDismiss={() => setBadgeQueue(q => q.slice(1))} />
+
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
         {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={isPremium} onOpenPaywall={() => handleOpenPaywall()} />}
         {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
-        {showSymptoms && <SymptomTracker onClose={() => setShowSymptoms(false)} />}
+        {showSymptoms && <SymptomTracker onClose={() => { setShowSymptoms(false); checkBadges(); }} />}
         {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => { setShowSubscription(false); handleOpenPaywall(); }} />}
         {showHistory && (
           <RatingHistory
