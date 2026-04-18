@@ -1642,7 +1642,9 @@ async def get_scan_history(current_user: dict = Depends(get_current_user)):
     limit = 200 if is_premium else 5
     entries = await db.diary.find(
         {"user_id": uid},
-        {"food_name": 1, "overall_score": 1, "date": 1, "logged_at": 1, "barcode": 1, "product_image": 1, "dimensions": 1}
+        {"food_name": 1, "overall_score": 1, "verdict": 1, "date": 1, "logged_at": 1,
+         "barcode": 1, "product_image": 1, "dimensions": 1, "flags": 1,
+         "forYourCondition": 1, "alternatives": 1, "bodySystemsAffected": 1, "scan_id": 1}
     ).sort("logged_at", -1).to_list(limit)
     return {"history": [doc_to_dict(e) for e in entries], "is_premium": is_premium}
 

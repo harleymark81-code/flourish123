@@ -34,7 +34,7 @@ export default function RatingHistory({ onClose, onOpenRating }) {
           headers: getHeaders(),
           withCredentials: true,
         });
-        const entries = res.data.entries || [];
+        const entries = res.data.history || [];
 
         // Group by date
         const map = {};
