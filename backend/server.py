@@ -28,7 +28,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 # ── Anthropic helper with retry ────────────────────────────────────────────────
-ANTHROPIC_MODEL = "claude-3-5-haiku-20241022"
+ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
 def _is_transient_error(exc):
     """Retry on 5xx Anthropic errors or network errors."""
