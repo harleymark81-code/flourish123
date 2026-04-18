@@ -301,6 +301,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         product_image: productImage
       }, { headers: getHeaders(), withCredentials: true });
       setCurrentRating(res.data);
+      loadStats();
     } catch (e) {
       if (e.response?.status === 429) {
         ph.scanLimitReached();

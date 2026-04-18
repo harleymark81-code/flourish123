@@ -159,6 +159,8 @@ async def lifespan(app: FastAPI):
     await db.cycle_logs.create_index([("user_id", 1), ("period_start", -1)])
     await db.barcode_cache.create_index("barcode", unique=True)
     await db.barcode_cache.create_index("cached_at", expireAfterSeconds=86400)
+    await db.diary.create_index([("user_id", 1), ("date", -1)])
+    await db.diary.create_index("scan_id", unique=True, sparse=True)
 
     # ── Weekly report cron ──
     _scheduler.add_job(
@@ -683,6 +685,32 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
             result["id"] = str(uuid.uuid4())
             result["from_cache"] = True
             logger.info(f"Barcode cache hit: {data.barcode}")
+            # Save to diary so scan limit, stats, and badges all update correctly
+            scan_id = result["id"]
+            try:
+                await db.diary.update_one(
+                    {"scan_id": scan_id},
+                    {"$setOnInsert": {
+                        "scan_id": scan_id,
+                        "user_id": uid,
+                        "food_name": result.get("food_name") or result.get("name", data.food_name),
+                        "overall_score": result.get("overallScore", 0),
+                        "verdict": result.get("verdict", ""),
+                        "dimensions": result.get("dimensions"),
+                        "flags": result.get("flags"),
+                        "forYourCondition": result.get("forYourCondition", ""),
+                        "alternatives": result.get("alternatives"),
+                        "bodySystemsAffected": result.get("bodySystemsAffected"),
+                        "barcode": data.barcode or "",
+                        "product_image": data.product_image or "",
+                        "date": today,
+                        "logged_at": datetime.now(timezone.utc).isoformat(),
+                        "note": "",
+                    }},
+                    upsert=True
+                )
+            except Exception as de:
+                logger.warning(f"Diary auto-save error (cache hit): {de}")
             return result
 
     conditions = current_user.get("conditions", [])
@@ -752,6 +780,32 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
         rating_data["user_id"] = uid
         rating_data["date"] = today
         rating_data["id"] = str(uuid.uuid4())
+
+        # ── Save to diary (drives scan limit, stats, history, badges) ───────────
+        try:
+            await db.diary.update_one(
+                {"scan_id": rating_data["id"]},
+                {"$setOnInsert": {
+                    "scan_id": rating_data["id"],
+                    "user_id": uid,
+                    "food_name": rating_data.get("food_name") or rating_data.get("name", data.food_name),
+                    "overall_score": rating_data.get("overallScore", 0),
+                    "verdict": rating_data.get("verdict", ""),
+                    "dimensions": rating_data.get("dimensions"),
+                    "flags": rating_data.get("flags"),
+                    "forYourCondition": rating_data.get("forYourCondition", ""),
+                    "alternatives": rating_data.get("alternatives"),
+                    "bodySystemsAffected": rating_data.get("bodySystemsAffected"),
+                    "barcode": data.barcode or "",
+                    "product_image": data.product_image or "",
+                    "date": today,
+                    "logged_at": datetime.now(timezone.utc).isoformat(),
+                    "note": "",
+                }},
+                upsert=True
+            )
+        except Exception as de:
+            logger.warning(f"Diary auto-save error: {de}")
 
         # ── Store in barcode cache ─────────────────────────────────────────────
         if data.barcode:
@@ -857,10 +911,23 @@ async def log_to_diary(data: DiaryLogRequest, current_user: dict = Depends(get_c
         "logged_at": datetime.now(timezone.utc).isoformat(),
         "note": ""
     }
-    result = await db.diary.insert_one(entry)
-    entry["_id"] = str(result.inserted_id)
-    entry["id"] = str(result.inserted_id)
-    return entry
+
+    # If the rating id is provided, upsert against the auto-saved diary entry
+    # so "Log to diary" enriches the existing record rather than creating a duplicate
+    scan_id = data.id if data.id else None
+    if scan_id:
+        await db.diary.update_one(
+            {"scan_id": scan_id, "user_id": uid},
+            {"$set": entry},
+            upsert=True
+        )
+        doc = await db.diary.find_one({"scan_id": scan_id, "user_id": uid})
+        return doc_to_dict(doc) if doc else entry
+    else:
+        result = await db.diary.insert_one(entry)
+        entry["_id"] = str(result.inserted_id)
+        entry["id"] = str(result.inserted_id)
+        return entry
 
 @api_router.get("/diary")
 async def get_diary(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):

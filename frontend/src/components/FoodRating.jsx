@@ -282,6 +282,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
     if (logged) return;
     try {
       await axios.post(`${API}/diary/log`, {
+        id: rating.id,
         food_name: rating.food_name || rating.name,
         overall_score: rating.overallScore,
         verdict: rating.verdict,
