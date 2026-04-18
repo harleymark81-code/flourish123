@@ -124,7 +124,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
   // Free users see a gated preview screen
   if (!isPremium) {
     return (
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 90 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(90px + env(safe-area-inset-bottom, 0px))" }}>
         <div style={{ background: "var(--bg-card)", padding: "52px 20px 16px", borderBottom: "1px solid var(--border)" }}>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Insights</h1>
         </div>
@@ -175,7 +175,7 @@ export default function InsightsScreen({ onOpenPaywall }) {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 90 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(90px + env(safe-area-inset-bottom, 0px))" }}>
       {/* Header */}
       <div style={{ background: "var(--bg-card)", padding: "52px 20px 16px", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>

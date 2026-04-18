@@ -384,7 +384,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 80 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
       {/* Streak Reward Banner */}
       <AnimatePresence>
         {showReward && streakReward && (

@@ -156,7 +156,7 @@ export default function MyFoodsScreen({ onOpenPaywall, onRateFood }) {
   const checkedCount = shoppingList.filter(i => i.checked).length;
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 90 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(90px + env(safe-area-inset-bottom, 0px))" }}>
       {/* Header */}
       <div style={{ background: "var(--bg-card)", padding: "52px 20px 16px", borderBottom: "1px solid var(--border)" }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 16px" }}>My Foods</h1>

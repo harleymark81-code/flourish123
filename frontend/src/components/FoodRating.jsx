@@ -334,7 +334,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
       animate={{ x: 0 }}
       exit={{ x: "100%" }}
       transition={{ type: "spring", damping: 30, stiffness: 280 }}
-      style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-elevated)", paddingBottom: 120 }}>
+      style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-elevated)", paddingBottom: "calc(120px + env(safe-area-inset-bottom, 0px))" }}>
 
       {/* Header */}
       <div style={{ position: "sticky", top: 0, background: "var(--header-sticky)", backdropFilter: "blur(20px)", padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 20, borderBottom: "1px solid var(--border)" }}>

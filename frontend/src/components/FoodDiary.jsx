@@ -133,7 +133,7 @@ export default function FoodDiary({ onOpenPaywall }) {
   if (!isPremium) {
     ph.diaryLockedHit();
     return (
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: 80 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: "center" }}>
           <motion.div
             animate={{ scale: [1, 1.04, 1] }}
@@ -159,7 +159,7 @@ export default function FoodDiary({ onOpenPaywall }) {
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: 80, paddingTop: 56 }}>
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", paddingTop: 56 }}>
       <div style={{ padding: "0 20px" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
