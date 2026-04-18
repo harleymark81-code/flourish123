@@ -285,6 +285,18 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     if (loadMsgInterval.current) clearInterval(loadMsgInterval.current);
   };
 
+  const openRecentRating = (entry) => {
+    // Reconstruct the rating object from the saved diary entry.
+    // FoodRating expects overallScore (camelCase); diary stores overall_score.
+    setCurrentRating({
+      ...entry,
+      overallScore: entry.overallScore ?? entry.overall_score,
+      food_name: entry.food_name || entry.name,
+      name: entry.food_name || entry.name,
+      id: entry.id || entry._id,
+    });
+  };
+
   const rateFood = async (foodName, ingredients = "", barcode = "", productImage = "") => {
     if (!foodName.trim()) {
       setInputShake(true);
@@ -701,7 +713,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                   key={entry.id || i}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0, transition: { delay: i * 0.06 } }}
-                  style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 16px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => openRecentRating(entry)}
+                  style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 16px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 10, background: "var(--bg-elevated)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
                       {entry.product_image ? (
