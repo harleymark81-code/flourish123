@@ -15,24 +15,27 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Returns Authorization header when a stored token exists.
+  // Returns Authorization header for backwards compatibility with sessions that
+  // still have a token in localStorage. New sessions rely on the httpOnly cookie.
   const getHeaders = () => {
     const token = localStorage.getItem(TOKEN_KEY);
     return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
   useEffect(() => {
+    // Try cookie-based auth first (withCredentials is set globally).
+    // If a legacy localStorage token exists, send it as fallback and then
+    // migrate to cookie-only by removing it from localStorage.
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     axios.get(`${API}/auth/me`, { headers })
       .then(res => {
-        console.log("[Flourish] /auth/me response:", res.data);
-        console.log("[Flourish] is_admin:", res.data?.is_admin, "| is_premium:", res.data?.is_premium);
         setUser(res.data);
         identifyUser(res.data);
+        // Migrate: clear localStorage token now that the cookie is active.
+        if (token) localStorage.removeItem(TOKEN_KEY);
       })
       .catch(() => {
-        // Token invalid or expired — clear it so the user sees sign-in
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
       })
@@ -55,8 +58,8 @@ export function AuthProvider({ children }) {
     const res = await axios.post(`${API}/auth/register`, payload, {
       headers: { "Content-Type": "application/json" },
     });
-    const { user: u, token } = res.data;
-    if (token) localStorage.setItem(TOKEN_KEY, token);
+    const { user: u } = res.data;
+    // Token is set as an httpOnly cookie by the server — do not store in localStorage.
     localStorage.removeItem("fl_ref"); // consumed — clear so it doesn't affect future signups
     setUser(u);
     identifyUser(u);
@@ -86,10 +89,8 @@ export function AuthProvider({ children }) {
       { email: email.trim().toLowerCase(), password },
       { headers: { "Content-Type": "application/json" } }
     );
-    const { user: u, token } = res.data;
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    console.log("[Flourish] login response user:", u);
-    console.log("[Flourish] is_admin:", u?.is_admin, "| is_premium:", u?.is_premium);
+    const { user: u } = res.data;
+    // Token is set as an httpOnly cookie by the server — do not store in localStorage.
     setUser(u);
     identifyUser(u);
     ph.userLoggedIn();
@@ -121,7 +122,6 @@ export function AuthProvider({ children }) {
   // Admin users bypass all premium gates automatically.
   // Use this everywhere instead of user?.is_premium directly.
   const isPremium = !!(user?.is_premium || user?.is_admin);
-  if (user) console.log("[Flourish] isPremium computed:", isPremium, "(is_premium:", user.is_premium, "| is_admin:", user.is_admin, ")");
 
   return (
     <AuthContext.Provider value={{ user, setUser, loading, isPremium, getHeaders, register, login, logout, refreshUser, updateProfile, API }}>

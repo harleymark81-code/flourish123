@@ -61,7 +61,9 @@ export default function AdminDashboard() {
       setTransactions(tRes.data.transactions || []);
       setAffiliates(aRes.data.applications || []);
       setActivity(actRes.data.activity || []);
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Admin] Failed to load dashboard data:", e);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -81,7 +83,9 @@ export default function AdminDashboard() {
     try {
       await axios.put(`${API}/admin/affiliates/${id}/status`, { status }, { headers });
       setAffiliates(prev => prev.map(a => a.id === id ? { ...a, status } : a));
-    } catch (e) {}
+    } catch (e) {
+      console.error("[Admin] Failed to update affiliate status:", e);
+    }
   };
 
   const maxActivity = Math.max(...activity.map(a => a.count), 1);

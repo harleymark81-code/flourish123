@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 from bson.errors import InvalidId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any, Annotated
 import asyncio
 import os
@@ -350,14 +350,14 @@ async def require_admin_user(request: Request):
 
 # ── Pydantic Models ────────────────────────────────────────────────────────────
 class RegisterRequest(BaseModel):
-    email: str
-    password: str
-    name: Optional[str] = ""
-    referred_by: Optional[str] = None
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    name: Optional[str] = Field(default="", max_length=100)
+    referred_by: Optional[str] = Field(default=None, max_length=20)
 
 class LoginRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
 
 class ProfileUpdateRequest(BaseModel):
     conditions: List[str]
@@ -371,10 +371,10 @@ class ProfileUpdateRequest(BaseModel):
     cycle_tracking: Optional[bool] = False
 
 class FoodRatingRequest(BaseModel):
-    food_name: str
-    ingredients: Optional[str] = ""
-    barcode: Optional[str] = ""
-    product_image: Optional[str] = ""
+    food_name: str = Field(min_length=1, max_length=200)
+    ingredients: Optional[str] = Field(default="", max_length=3000)
+    barcode: Optional[str] = Field(default="", max_length=50)
+    product_image: Optional[str] = Field(default="", max_length=500)
 
 class DiaryLogRequest(BaseModel):
     food_name: str
@@ -392,8 +392,8 @@ class DiaryLogRequest(BaseModel):
     rated_at: Optional[str] = None
 
 class DiaryNoteRequest(BaseModel):
-    entry_id: str
-    note: str
+    entry_id: str = Field(max_length=50)
+    note: str = Field(max_length=1000)
 
 class SymptomRequest(BaseModel):
     energy: int = Field(ge=1, le=5)
@@ -406,41 +406,47 @@ class SymptomRequest(BaseModel):
     digestive: Optional[int] = Field(default=None, ge=1, le=5)
 
 class FavouriteRequest(BaseModel):
-    food_name: str
+    food_name: str = Field(min_length=1, max_length=200)
     rating_data: Optional[dict] = None
 
 class ShoppingItemRequest(BaseModel):
-    name: str
-    source: Optional[str] = "manual"  # manual | scan | favourites | swaps
+    name: str = Field(min_length=1, max_length=200)
+    source: Optional[str] = Field(default="manual", max_length=20)
 
 class CycleLogRequest(BaseModel):
-    period_start: str   # ISO date string
-    period_length: Optional[int] = 28
+    period_start: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    period_length: Optional[int] = Field(default=28, ge=20, le=45)
 
 class PasswordResetRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 class PasswordResetConfirmRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(min_length=1, max_length=100)
+    new_password: str = Field(min_length=8, max_length=128)
 
 class MealPlanRequest(BaseModel):
     regenerate: Optional[bool] = False
 
+_ALLOWED_ORIGINS = {
+    "https://theflourishapp.netlify.app",
+    "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app",
+    "https://flourish123-production.up.railway.app",
+}
+
 class CheckoutRequest(BaseModel):
-    plan: str  # "monthly" or "annual"
-    origin_url: str
+    plan: str = Field(pattern="^(monthly|annual)$")
+    origin_url: str = Field(max_length=200)
 
 class AffiliateApplicationRequest(BaseModel):
-    name: str
-    email: str
-    social_handles: str
-    audience_size: str
-    condition_niche: str
-    description: str
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    social_handles: str = Field(min_length=1, max_length=300)
+    audience_size: str = Field(min_length=1, max_length=50)
+    condition_niche: str = Field(min_length=1, max_length=200)
+    description: str = Field(min_length=1, max_length=2000)
 
 class AdminLoginRequest(BaseModel):
-    password: str
+    password: str = Field(min_length=1, max_length=200)
 
 # ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 @api_router.post("/auth/register")
@@ -450,10 +456,6 @@ async def register(request: Request, data: RegisterRequest):
     email = data.email.lower().strip()
 
     logger.info(f"[register] attempt email={email} password_len={len(data.password)} name={repr(data.name)}")
-
-    if len(data.password) < 8:
-        logger.info(f"[register] rejected — password too short for {email}")
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
 
     if await db.users.find_one({"email": email}):
         logger.info(f"[register] rejected — email already registered: {email}")
@@ -1109,6 +1111,10 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
         raise HTTPException(status_code=500, detail="Price ID not configured")
 
     origin = data.origin_url.rstrip("/")
+    # Allow localhost in non-production environments for local dev
+    allowed = _ALLOWED_ORIGINS | ({o for o in (os.environ.get("CORS_ORIGINS", "").split(",")) if o.strip()} if not IS_PRODUCTION else set())
+    if origin not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid origin URL")
     success_url = f"{origin}/?success=true&session_id={{CHECKOUT_SESSION_ID}}"
     cancel_url = f"{origin}/?cancelled=true"
 
@@ -1219,8 +1225,9 @@ async def stripe_webhook(request: Request):
             subscription_id = data_obj.get("subscription")
 
             if session_id and (payment_status in ["paid", "no_payment_required"]):
+                is_trial = (payment_status == "no_payment_required")
                 update_fields = {
-                    "payment_status": "paid",
+                    "payment_status": "paid" if not is_trial else "trialing",
                     "status": "complete",
                     "updated_at": datetime.now(timezone.utc).isoformat()
                 }
@@ -1234,14 +1241,20 @@ async def stripe_webhook(request: Request):
                 )
                 if user_id:
                     try:
-                        expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
+                        # For trials: grant access for trial period only (Stripe revokes via webhook on expiry).
+                        # For paid: grant based on plan duration.
+                        if is_trial:
+                            expires = (datetime.now(timezone.utc) + timedelta(days=4)).isoformat()
+                        else:
+                            expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
                         await db.users.update_one(
                             {"_id": ObjectId(user_id)},
                             {"$set": {
                                 "is_premium": True,
                                 "premium_plan": plan,
                                 "premium_since": datetime.now(timezone.utc).isoformat(),
-                                "premium_expires_at": expires
+                                "premium_expires_at": expires,
+                                "is_trialing": is_trial,
                             }}
                         )
                         logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan})")
@@ -1318,12 +1331,12 @@ async def stripe_webhook(request: Request):
                         days = 365 if is_annual else 30
                         await db.users.update_one(
                             {"_id": ObjectId(uid)},
-                            {"$set": {"is_premium": True, "premium_expires_at": (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()}}
+                            {"$set": {"is_premium": True, "is_trialing": False, "premium_expires_at": (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()}}
                         )
                     elif sub_status in ("canceled", "unpaid", "past_due"):
                         await db.users.update_one(
                             {"_id": ObjectId(uid)},
-                            {"$set": {"is_premium": False}}
+                            {"$set": {"is_premium": False, "is_trialing": False}}
                         )
                         logger.info(f"User {uid} premium paused — sub status: {sub_status}")
 
@@ -1334,7 +1347,7 @@ async def stripe_webhook(request: Request):
                 if uid:
                     await db.users.update_one(
                         {"_id": ObjectId(uid)},
-                        {"$set": {"is_premium": False, "premium_expires_at": datetime.now(timezone.utc).isoformat()}}
+                        {"$set": {"is_premium": False, "is_trialing": False, "premium_expires_at": datetime.now(timezone.utc).isoformat()}}
                     )
                     logger.info(f"User {uid} downgraded — subscription deleted")
 
@@ -1354,7 +1367,7 @@ async def stripe_webhook(request: Request):
                     expires = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
                     await db.users.update_one(
                         {"_id": ObjectId(uid)},
-                        {"$set": {"is_premium": True, "premium_expires_at": expires}}
+                        {"$set": {"is_premium": True, "is_trialing": False, "premium_expires_at": expires}}
                     )
                     logger.info(f"Premium renewed for user {uid} ({plan}, +{days}d)")
 
@@ -1367,7 +1380,7 @@ async def stripe_webhook(request: Request):
                     if attempt_count >= 3:
                         await db.users.update_one(
                             {"_id": ObjectId(uid)},
-                            {"$set": {"is_premium": False}}
+                            {"$set": {"is_premium": False, "is_trialing": False}}
                         )
                         logger.warning(f"User {uid} premium revoked after {attempt_count} failed payment attempts")
                     else:
@@ -1443,7 +1456,8 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
 
 # ── AFFILIATE ─────────────────────────────────────────────────────────────────
 @api_router.post("/affiliate/apply")
-async def affiliate_apply(data: AffiliateApplicationRequest):
+@limiter.limit("5/minute")
+async def affiliate_apply(request: Request, data: AffiliateApplicationRequest):
     existing = await db.affiliate_applications.find_one({"email": data.email})
     if existing:
         raise HTTPException(status_code=400, detail="Application already submitted with this email")
@@ -1501,10 +1515,11 @@ async def affiliate_dashboard(ref: str, current_user: dict = Depends(get_current
     }
 
 @api_router.post("/affiliate/track-click")
+@limiter.limit("30/minute")
 async def track_affiliate_click(request: Request):
     body = await request.json()
     ref = body.get("ref", "")
-    if ref:
+    if ref and len(ref) <= 20:
         await db.affiliate_applications.update_one(
             {"affiliate_code": ref},
             {"$inc": {"clicks": 1}}
@@ -1612,7 +1627,10 @@ async def admin_activity(request: Request):
 
 # ── OPEN FOOD FACTS ────────────────────────────────────────────────────────────
 @api_router.get("/food/barcode/{barcode}")
-async def lookup_barcode(barcode: str):
+@limiter.limit("30/minute")
+async def lookup_barcode(request: Request, barcode: str, current_user: dict = Depends(get_current_user)):
+    if len(barcode) > 50 or not barcode.isalnum():
+        raise HTTPException(status_code=400, detail="Invalid barcode format")
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json")
@@ -1914,15 +1932,14 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             reset_link=reset_link,
         )
         if not ok:
-            logger.warning(f"Password reset email failed for {email} — reset link: {reset_link}")
+            logger.warning(f"Password reset email failed for {email}")
         else:
             logger.info(f"Password reset email sent to {email}")
     return {"success": True, "message": "If an account exists with this email, a reset link has been sent."}
 
 @api_router.post("/auth/reset-password")
-async def reset_password(data: PasswordResetConfirmRequest):
-    if len(data.new_password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+@limiter.limit("5/minute")
+async def reset_password(request: Request, data: PasswordResetConfirmRequest):
     user = await db.users.find_one({"password_reset_token": data.token})
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
