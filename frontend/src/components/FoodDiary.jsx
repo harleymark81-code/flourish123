@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Flame, Trash2, ChevronLeft, ChevronRight, Lock, BookOpen } from "lucide-react";
+import { Flame, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
@@ -19,7 +19,7 @@ function formatDate(dateStr) {
 }
 
 export default function FoodDiary({ onOpenPaywall }) {
-  const { user, isPremium, getHeaders, API } = useAuth();
+  const { user, getHeaders, API } = useAuth();
 
   // Always call hooks — no early return before hooks
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
@@ -38,11 +38,10 @@ export default function FoodDiary({ onOpenPaywall }) {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (!isPremium) return;
     loadEntries(selectedDate);
     loadDiaryDates();
     loadStats();
-  }, [selectedDate, isPremium]);
+  }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadEntries = async (date) => {
     try {
@@ -124,39 +123,9 @@ export default function FoodDiary({ onOpenPaywall }) {
     return { avg, best, worst };
   })();
 
-  // Track diary open once for premium users (effect runs when isPremium becomes true)
   useEffect(() => {
-    if (isPremium) ph.diaryOpened();
-  }, [isPremium]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Free user premium gate — AFTER all hooks
-  if (!isPremium) {
-    ph.diaryLockedHit();
-    return (
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))" }}>
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ textAlign: "center" }}>
-          <motion.div
-            animate={{ scale: [1, 1.04, 1] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            style={{ width: 80, height: 80, borderRadius: "50%", background: "linear-gradient(135deg, #534AB7, #756AD9)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", boxShadow: "0 8px 32px rgba(83,74,183,0.25)" }}>
-            <BookOpen size={36} color="#fff" />
-          </motion.div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.02em" }}>Your Food Diary</h2>
-          <p style={{ fontSize: 15, color: "var(--text-secondary)", lineHeight: 1.65, marginBottom: 28 }}>
-            Your food diary is a Flourish Premium feature. Track every food you eat, see your patterns, and watch your health transform.
-          </p>
-          <motion.button
-            data-testid="diary-unlock-btn"
-            whileTap={{ scale: 0.96 }}
-            onClick={() => onOpenPaywall("diary")}
-            style={{ width: "100%", background: "linear-gradient(135deg, #534AB7, #756AD9)", color: "#fff", border: "none", borderRadius: 14, padding: "17px 24px", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 20px rgba(83,74,183,0.3), inset 0 1px 0 rgba(255,255,255,0.15)", minHeight: 56 }}>
-            Unlock with your 3-day free trial
-          </motion.button>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 12 }}>Cancel anytime. No charge for 3 days.</p>
-        </motion.div>
-      </div>
-    );
-  }
+    ph.diaryOpened();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", paddingTop: 56 }}>

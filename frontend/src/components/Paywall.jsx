@@ -87,7 +87,7 @@ function ConfettiBurst() {
   );
 }
 
-export default function Paywall({ onClose, user: userProp, entryPoint = "default" }) {
+export default function Paywall({ onClose, user: userProp, entryPoint = "default", hardGate = false }) {
   const { getHeaders, API, refreshUser, user: authUser, loading: authLoading } = useAuth();
   const user = authUser || userProp;
   const [plan, setPlan] = useState("annual");
@@ -144,7 +144,7 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
     }
   };
 
-  const handleClose = () => setShowExit(true);
+  const handleClose = () => { if (hardGate) return; setShowExit(true); };
 
   return (
     <>
@@ -168,10 +168,12 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
               </div>
               <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Flourish Premium</span>
             </div>
-            <motion.button data-testid="paywall-close-btn" whileTap={{ scale: 0.88 }} onClick={handleClose}
-              style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-              <X size={16} color="#6B6A7C" />
-            </motion.button>
+            {!hardGate && (
+              <motion.button data-testid="paywall-close-btn" whileTap={{ scale: 0.88 }} onClick={handleClose}
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <X size={16} color="#6B6A7C" />
+              </motion.button>
+            )}
           </div>
 
           <div style={{ padding: "20px 20px 0" }}>
@@ -343,10 +345,12 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
               {authLoading ? "Checking your account..." : loading ? "Creating your trial..." : !user ? "Sign in to continue" : plan === "annual" ? "Start 7-Day Free Trial →" : "Start 3-Day Free Trial →"}
             </motion.button>
 
-            <button data-testid="maybe-later-btn" onClick={handleClose}
-              style={{ width: "100%", background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, cursor: "pointer", padding: "8px 0", fontWeight: 500 }}>
-              Maybe later
-            </button>
+            {!hardGate && (
+              <button data-testid="maybe-later-btn" onClick={handleClose}
+                style={{ width: "100%", background: "none", border: "none", color: "var(--text-muted)", fontSize: 14, cursor: "pointer", padding: "8px 0", fontWeight: 500 }}>
+                Maybe later
+              </button>
+            )}
 
             <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6, marginTop: 16 }}>
               Flourish provides AI powered nutritional guidance. Not a substitute for medical advice.

@@ -7,7 +7,6 @@ import { ph } from "../lib/posthog";
 import FoodRating from "./FoodRating";
 import BarcodeScanner from "./BarcodeScanner";
 import MealPlanner from "./MealPlanner";
-import Paywall from "./Paywall";
 import SymptomTracker from "./SymptomTracker";
 import SubscriptionScreen from "./SubscriptionScreen";
 import RatingHistory from "./RatingHistory";
@@ -149,7 +148,7 @@ const NUDGE_MESSAGES = [
 ];
 
 export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName, onPendingFoodConsumed }) {
-  const { user, isPremium, getHeaders, API } = useAuth();
+  const { user, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState(null);
   const [dailyTip, setDailyTip] = useState("");
@@ -157,19 +156,13 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
   const [currentRating, setCurrentRating] = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const [showMealPlanner, setShowMealPlanner] = useState(false);
-  const [showPaywallLocal, setShowPaywallLocal] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [badgeQueue, setBadgeQueue] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [nudgeMsg, setNudgeMsg] = useState(null);
   const [barcodeError, setBarcodeError] = useState("");
 
-  const handleOpenPaywall = (entry = "default") => {
-    if (onOpenPaywall) onOpenPaywall(entry);
-    else setShowPaywallLocal(true);
-  };
 
   const conditionsKey = (user?.conditions || []).join(",");
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,16 +191,6 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     loadRecentRatings();
     checkStreakReward();
     initBadgeBaseline();
-    // Nudge banner for free users every 2–3 sessions
-    if (!isPremium) {
-      const count = parseInt(sessionStorage.getItem("fl_session_count") || "0", 10) + 1;
-      sessionStorage.setItem("fl_session_count", String(count));
-      const threshold = 2 + Math.round(Math.random()); // 2 or 3
-      if (count % threshold === 0) {
-        const msg = NUDGE_MESSAGES[Math.floor(Math.random() * NUDGE_MESSAGES.length)];
-        setTimeout(() => setNudgeMsg(msg), 3000);
-      }
-    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-trigger rating when navigating from My Foods "Rate again"
@@ -352,12 +335,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       loadStats();
       checkBadges();
     } catch (e) {
-      if (e.response?.status === 429) {
-        ph.scanLimitReached();
-        handleOpenPaywall("scan_limit");
-      } else {
-        ph.apiError("/food/rate", e.message, e.response?.status);
-      }
+      ph.apiError("/food/rate", e.message, e.response?.status);
     } finally {
       setLoading(false);
       stopLoading();
@@ -398,15 +376,10 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         setTimeout(() => setBarcodeError(""), 5000);
       }
     } catch (e) {
-      if (e.response?.status === 429) {
-        ph.scanLimitReached();
-        handleOpenPaywall("scan_limit");
-      } else {
-        ph.barcodeScanFailed("network_error");
-        ph.apiError("/food/barcode", e.message, e.response?.status);
-        setBarcodeError("Couldn't look up that barcode. Try searching by name.");
-        setTimeout(() => setBarcodeError(""), 5000);
-      }
+      ph.barcodeScanFailed("network_error");
+      ph.apiError("/food/barcode", e.message, e.response?.status);
+      setBarcodeError("Couldn't look up that barcode. Try searching by name.");
+      setTimeout(() => setBarcodeError(""), 5000);
     } finally {
       setLoading(false);
       stopLoading();
@@ -429,7 +402,6 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
     return <FoodRating
       rating={currentRating}
       onBack={() => { setCurrentRating(null); loadRecentRatings(); loadStats(); }}
-      onOpenPaywall={(entry) => handleOpenPaywall(entry)}
       onRateFood={(name) => { setCurrentRating(null); rateFood(name); }}
     />;
   }
@@ -481,33 +453,6 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
         )}
       </AnimatePresence>
 
-      {/* Nudge Banner */}
-      <AnimatePresence>
-        {nudgeMsg && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 300, damping: 28 } }}
-            exit={{ y: 80, opacity: 0 }}
-            style={{ position: "fixed", bottom: 90, left: 0, right: 0, zIndex: 9100, display: "flex", justifyContent: "center", padding: "0 16px" }}>
-            <div style={{ maxWidth: 448, width: "100%", background: "#1A1A24", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, boxShadow: "0 8px 32px rgba(0,0,0,0.35)" }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ color: "#fff", fontSize: 13, lineHeight: 1.5, margin: "0 0 10px", fontWeight: 500 }}>{nudgeMsg}</p>
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => { setNudgeMsg(null); handleOpenPaywall("nudge"); }}
-                  style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  Unlock Flourish Premium
-                </motion.button>
-              </div>
-              <button
-                onClick={() => setNudgeMsg(null)}
-                style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: 8, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: "rgba(255,255,255,0.6)", fontSize: 16, lineHeight: 1 }}>
-                ×
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Header */}
       <div style={{ background: "linear-gradient(180deg, var(--bg-card) 0%, var(--bg-app) 100%)", padding: "52px 20px 20px" }}>
@@ -537,14 +482,10 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
             transition={{ type: "spring", damping: 20 }}
             style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", boxShadow: "0 2px 12px rgba(83,74,183,0.08)", marginBottom: 16 }}>
             <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 16 }}>Today at a glance</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: !stats.is_premium ? 14 : 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 700, color: stats.monthly_avg >= 70 ? "#639922" : stats.monthly_avg >= 40 ? "#BA7517" : "#A32D2D", margin: 0 }}>{stats.monthly_avg}</p>
+                <p style={{ fontSize: 22, fontWeight: 700, color: stats.monthly_avg >= 70 ? "#639922" : stats.monthly_avg >= 40 ? "#BA7517" : "#A32D2D", margin: 0 }}>{stats.monthly_avg || "—"}</p>
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Avg Score</p>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.today_ratings}</p>
-                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Logged</p>
               </div>
               <div style={{ textAlign: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 2 }}>
@@ -554,39 +495,10 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
                 <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Streak</p>
               </div>
               <div style={{ textAlign: "center" }}>
-                <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.is_premium ? "∞" : stats.remaining_ratings}</p>
-                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Left today</p>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "#534AB7", margin: 0 }}>{stats.longest_streak || 0}</p>
+                <p style={{ fontSize: 10, color: "var(--text-secondary)", margin: 0 }}>Best streak</p>
               </div>
             </div>
-            {/* Scan progress bar — free users only */}
-            {!stats.is_premium && (
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                  <span style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>
-                    {stats.today_ratings} of 3 free scans used today
-                  </span>
-                  {stats.remaining_ratings === 0 && (
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => onOpenPaywall("scan_limit")}
-                      style={{ fontSize: 10, fontWeight: 700, color: "#534AB7", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                      Unlock unlimited
-                    </motion.button>
-                  )}
-                </div>
-                <div style={{ background: "var(--border)", borderRadius: 4, height: 5, overflow: "hidden" }}>
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.min((stats.today_ratings / stats.daily_limit) * 100, 100)}%` }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    style={{
-                      height: "100%", borderRadius: 4,
-                      background: stats.remaining_ratings === 0 ? "#A32D2D" : stats.remaining_ratings <= 1 ? "#BA7517" : "#534AB7"
-                    }}
-                  />
-                </div>
-              </div>
-            )}
           </motion.div>
         )}
 
@@ -732,7 +644,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.17, type: "spring" }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => { if (isPremium) { setShowSymptoms(true); ph.symptomCheckinOpened(); } else { onOpenPaywall("symptoms"); } }}
+          onClick={() => { setShowSymptoms(true); ph.symptomCheckinOpened(); }}
           style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid var(--border)", borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", marginBottom: 20, boxShadow: "0 2px 12px rgba(83,74,183,0.07)" }}>
           <Heart size={16} color="#534AB7" />
           <span style={{ fontSize: 14, fontWeight: 600, color: "#534AB7" }}>How are you feeling today?</span>
@@ -790,10 +702,9 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
-        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={isPremium} onOpenPaywall={() => handleOpenPaywall()} />}
-        {showPaywallLocal && <Paywall onClose={() => setShowPaywallLocal(false)} user={user} />}
+        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={true} />}
         {showSymptoms && <SymptomTracker onClose={() => { setShowSymptoms(false); checkBadges(); }} />}
-        {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => { setShowSubscription(false); handleOpenPaywall(); }} />}
+        {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => setShowSubscription(false)} />}
         {showHistory && (
           <RatingHistory
             onClose={() => setShowHistory(false)}

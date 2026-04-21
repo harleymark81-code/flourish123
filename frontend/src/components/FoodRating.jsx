@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Share2, BookmarkPlus, Check, Lock, ChevronRight, Bell, X, Heart, ChevronDown } from "lucide-react";
+import { ArrowLeft, Share2, BookmarkPlus, Check, ChevronRight, Bell, X, Heart, ChevronDown } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
@@ -66,15 +66,6 @@ function getVerdict(score) {
   return { label: "Use caution", color: "#A32D2D", bg: "rgba(163,45,45,0.12)" };
 }
 
-function PixelatedScore({ score }) {
-  // Show number with heavy blur = "pixelated but visible"
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-      <span style={{ fontSize: 18, fontWeight: 700, color: "#534AB7", filter: "blur(5px)", userSelect: "none" }}>{score}</span>
-      <Lock size={13} color="#534AB7" />
-    </div>
-  );
-}
 
 function ScoreCircle({ score, size = 92 }) {
   const [displayed, setDisplayed] = useState(0);
@@ -155,7 +146,7 @@ function getDimScoreColor(score) {
   return "#A32D2D";
 }
 
-function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock }) {
+function DimensionCard({ label, score, summary, why }) {
   const [showWhy, setShowWhy] = useState(false);
   const safeScore = score ?? 0;
   const isNewScale = score != null && safeScore <= 10;
@@ -166,67 +157,49 @@ function DimensionCard({ label, score, summary, why, locked, pixelated, onUnlock
     <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 14, border: "1px solid var(--border)", position: "relative", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <p style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: 0.7, margin: 0 }}>{label}</p>
-        {pixelated ? <PixelatedScore score={score} /> : locked ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-            <span style={{ fontSize: 17, fontWeight: 700, filter: "blur(4px)", color: "#534AB7", userSelect: "none" }}>{score}</span>
-            <Lock size={13} color="#534AB7" />
-          </div>
-        ) : (
-          <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: "-0.02em" }}>
-            {score != null ? `${score}${isNewScale ? "/10" : ""}` : "—"}
-          </span>
-        )}
+        <span style={{ fontSize: 18, fontWeight: 800, color, letterSpacing: "-0.02em" }}>
+          {score != null ? `${score}${isNewScale ? "/10" : ""}` : "—"}
+        </span>
       </div>
       <div style={{ height: 5, background: "var(--border)", borderRadius: 3, marginBottom: 8, overflow: "hidden" }}>
         <motion.div
           initial={{ width: 0 }}
-          animate={{ width: locked || pixelated ? "0%" : `${barPct}%` }}
+          animate={{ width: `${barPct}%` }}
           transition={{ type: "spring", stiffness: 180, damping: 22 }}
           style={{ height: "100%", background: color, borderRadius: 3 }}
         />
       </div>
-      {locked || pixelated ? (
-        <div>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 6px", filter: "blur(3px)", lineHeight: 1.4, userSelect: "none" }}>
-            This dimension shows how this food is directly affecting your condition.
-          </p>
-          <button onClick={onUnlock} style={{ fontSize: 12, color: "#534AB7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
-            Unlock with Premium →
-          </button>
-        </div>
-      ) : (
-        <div>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 }}>{summary}</p>
-          {why && (
-            <div>
-              <button
-                onClick={() => { setShowWhy(v => !v); if (!showWhy) ph.ingredientDetailExpanded("", label); }}
-                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#534AB7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", marginTop: 2 }}>
-                Why this score?
-                <ChevronDown size={11} style={{ transform: showWhy ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
-              </button>
-              <AnimatePresence>
-                {showWhy && (
-                  <motion.p
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ fontSize: 11, color: color, margin: "4px 0 0", fontWeight: 600, lineHeight: 1.4, overflow: "hidden" }}>
-                    {why}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-      )}
+      <div>
+        <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: 0, lineHeight: 1.45 }}>{summary}</p>
+        {why && (
+          <div>
+            <button
+              onClick={() => { setShowWhy(v => !v); if (!showWhy) ph.ingredientDetailExpanded("", label); }}
+              style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#534AB7", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: "6px 0 0", marginTop: 2 }}>
+              Why this score?
+              <ChevronDown size={11} style={{ transform: showWhy ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+            </button>
+            <AnimatePresence>
+              {showWhy && (
+                <motion.p
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ fontSize: 11, color: color, margin: "4px 0 0", fontWeight: 600, lineHeight: 1.4, overflow: "hidden" }}>
+                  {why}
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }) {
-  const { user, isPremium, getHeaders, API } = useAuth();
+  const { user, getHeaders, API } = useAuth();
   const [logged, setLogged] = useState(false);
   const [particles, setParticles] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
@@ -272,11 +245,6 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
   }, []);
   const verdict = getVerdict(rating.overallScore);
 
-  // Free: Overall score + Naturalness shown; Hormonal Impact, Inflammation, Gut Health locked
-  // Free: show forYourCondition first 2 sentences, then blur
-  const sentences = (rating.forYourCondition || "").split(/(?<=\.)\s+/);
-  const freeInsight = sentences.slice(0, 2).join(" ");
-  const hasMoreInsight = sentences.length > 2;
 
   const handleLog = async () => {
     if (logged) return;
@@ -385,39 +353,16 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
         {/* For your conditions */}
         <div style={{ borderLeft: "3px solid #534AB7", background: "var(--bg-card)", borderRadius: "0 14px 14px 0", padding: "16px 16px 16px 18px", marginBottom: 20, boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
           <p style={{ fontSize: 11, fontWeight: 800, color: "#534AB7", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 8px" }}>For your conditions</p>
-          {isPremium ? (
-            <p style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.65, margin: 0 }}>{rating.forYourCondition}</p>
-          ) : (
-            <div>
-              <p style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.65, margin: "0 0 10px" }}>{freeInsight}</p>
-              {hasMoreInsight && (
-                <div style={{ position: "relative" }}>
-                  <p style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.65, margin: 0, filter: "blur(5px)", userSelect: "none", pointerEvents: "none" }}>
-                    {sentences.slice(2).join(" ")} This is where the specific hormonal interactions become clear for your condition.
-                  </p>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <motion.button whileTap={{ scale: 0.95 }} onClick={() => onOpenPaywall("condition_insight")}
-                      style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(83,74,183,0.3)" }}>
-                      This insight contains specific findings — unlock
-                    </motion.button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          <p style={{ fontSize: 14, color: "var(--text-primary)", lineHeight: 1.65, margin: 0 }}>{rating.forYourCondition}</p>
         </div>
 
         {/* Health dimensions */}
         <p style={{ fontSize: 17, fontWeight: 800, color: "var(--text-primary)", marginBottom: 12, letterSpacing: "-0.02em" }}>Health dimensions</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
-          {/* Free: Overall score + Naturalness shown; Hormonal Impact, Inflammation, Gut Health locked */}
-          <DimensionCard label="Naturalness" score={rating.dimensions?.naturalness?.score} summary={rating.dimensions?.naturalness?.summary} why={rating.dimensions?.naturalness?.why} locked={false} />
-          <DimensionCard label="Hormonal Impact" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} why={rating.dimensions?.hormonalImpact?.why}
-            locked={!isPremium} onUnlock={() => onOpenPaywall("hormonal")} />
-          <DimensionCard label="Inflammation" score={rating.dimensions?.inflammation?.score} summary={rating.dimensions?.inflammation?.summary} why={rating.dimensions?.inflammation?.why}
-            locked={!isPremium} onUnlock={() => onOpenPaywall("inflammation")} />
-          <DimensionCard label="Gut Health" score={rating.dimensions?.gutHealth?.score} summary={rating.dimensions?.gutHealth?.summary} why={rating.dimensions?.gutHealth?.why}
-            locked={!isPremium} onUnlock={() => onOpenPaywall("gut_health")} />
+          <DimensionCard label="Naturalness" score={rating.dimensions?.naturalness?.score} summary={rating.dimensions?.naturalness?.summary} why={rating.dimensions?.naturalness?.why} />
+          <DimensionCard label="Hormonal Impact" score={rating.dimensions?.hormonalImpact?.score} summary={rating.dimensions?.hormonalImpact?.summary} why={rating.dimensions?.hormonalImpact?.why} />
+          <DimensionCard label="Inflammation" score={rating.dimensions?.inflammation?.score} summary={rating.dimensions?.inflammation?.summary} why={rating.dimensions?.inflammation?.why} />
+          <DimensionCard label="Gut Health" score={rating.dimensions?.gutHealth?.score} summary={rating.dimensions?.gutHealth?.summary} why={rating.dimensions?.gutHealth?.why} />
         </div>
 
         {/* Positives — always shown in full */}
@@ -433,31 +378,11 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
           </div>
         )}
 
-        {/* Watch out — free: first warning only, rest blurred */}
+        {/* Watch out */}
         {rating.flags?.warnings?.length > 0 && (
           <div style={{ background: "rgba(163,45,45,0.07)", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(163,45,45,0.18)", boxShadow: "0 2px 16px rgba(83,74,183,0.05)" }}>
             <p style={{ fontSize: 13, fontWeight: 800, color: "#A32D2D", margin: "0 0 10px" }}>Watch out</p>
-            {/* Always show first warning */}
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
-              <span style={{ fontSize: 13, color: "#A32D2D", flexShrink: 0, marginTop: 1 }}>⚠</span>
-              <p style={{ fontSize: 13, color: "var(--text-primary)", margin: 0, lineHeight: 1.45 }}>{rating.flags.warnings[0]}</p>
-            </div>
-            {!isPremium && rating.flags.warnings.length > 1 && (
-              <div style={{ position: "relative", marginTop: 6 }}>
-                {rating.flags.warnings.slice(1).map((w, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4, filter: "blur(4px)", userSelect: "none", pointerEvents: "none" }}>
-                    <span style={{ fontSize: 13, color: "#A32D2D" }}>⚠</span>
-                    <p style={{ fontSize: 13, color: "var(--text-primary)", margin: 0 }}>{w}</p>
-                  </div>
-                ))}
-                <div style={{ background: "rgba(255,255,255,0.8)", borderRadius: 8, padding: "6px 10px", marginTop: 4 }}>
-                  <button onClick={() => onOpenPaywall("default")} style={{ fontSize: 12, color: "#A32D2D", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-                    See all warnings for your condition — unlock with free trial
-                  </button>
-                </div>
-              </div>
-            )}
-            {isPremium && rating.flags.warnings.slice(1).map((w, i) => (
+            {rating.flags.warnings.map((w, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
                 <span style={{ fontSize: 13, color: "#A32D2D", flexShrink: 0, marginTop: 1 }}>⚠</span>
                 <p style={{ fontSize: 13, color: "var(--text-primary)", margin: 0, lineHeight: 1.45 }}>{w}</p>
@@ -466,11 +391,11 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
           </div>
         )}
 
-        {/* Tips — free: first 2 shown */}
+        {/* Tips */}
         {rating.flags?.tips?.length > 0 && (
           <div style={{ background: "rgba(186,117,23,0.07)", borderRadius: 14, padding: 16, marginBottom: 20, border: "1px solid rgba(186,117,23,0.18)" }}>
             <p style={{ fontSize: 13, fontWeight: 800, color: "#BA7517", margin: "0 0 10px" }}>Tips</p>
-            {(isPremium ? rating.flags.tips : rating.flags.tips.slice(0, 2)).map((t, i) => (
+            {rating.flags.tips.map((t, i) => (
               <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
                 <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#BA7517", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2 }}>
                   <span style={{ color: "#fff", fontSize: 9, fontWeight: 800 }}>i</span>
@@ -494,77 +419,36 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
           })}
         </div>
 
-        {/* Try These Instead — premium only; teaser for free users */}
-        {(() => {
-          if (!rating.alternatives?.length) return null;
-          if (!isPremium) {
-            // Blurred teaser for free users
-            return (
-              <div style={{ position: "relative", borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
-                <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, border: "1px solid rgba(163,45,45,0.15)", filter: "blur(3px)", userSelect: "none", pointerEvents: "none" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                    <span style={{ fontSize: 18 }}>⚠️</span>
-                    <p style={{ fontSize: 15, fontWeight: 800, color: "#A32D2D", margin: 0 }}>Try These Instead</p>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {rating.alternatives.slice(0, 2).map((alt, i) => (
-                      <div key={i} style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🥗</span>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{alt.name}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(var(--bg-elevated-rgb, 255,255,255),0.6)", backdropFilter: "blur(2px)", borderRadius: 16, padding: 16, textAlign: "center" }}>
-                  <p style={{ fontSize: 14, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 4px" }}>Swap suggestions are Premium</p>
-                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 14px", lineHeight: 1.4 }}>See personalised swaps tailored to your conditions.</p>
-                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => onOpenPaywall("swaps")}
-                    style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 12px rgba(83,74,183,0.3)" }}>
-                    Unlock swap suggestions
-                  </motion.button>
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, marginBottom: 20, border: "1px solid rgba(163,45,45,0.15)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 18 }}>⚠️</span>
-                <p style={{ fontSize: 15, fontWeight: 800, color: "#A32D2D", margin: 0 }}>Try These Instead</p>
-              </div>
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px", lineHeight: 1.5 }}>
-                Based on your health profile, these alternatives may suit you better:
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {rating.alternatives.slice(0, 3).map((alt, i) => (
-                  <motion.button
-                    key={i}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => { ph.recommendationClicked(foodName, alt.name); if (onRateFood) onRateFood(alt.name); }}
-                    style={{
-                      background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      cursor: onRateFood ? "pointer" : "default", width: "100%", textAlign: "left",
-                      boxShadow: "0 1px 8px rgba(83,74,183,0.06)"
-                    }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 22 }}>🥗</span>
-                      <div>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{alt.name}</p>
-                        {onRateFood && (
-                          <p style={{ fontSize: 11, color: "#534AB7", fontWeight: 600, margin: "2px 0 0" }}>Tap to rate this food →</p>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: getScoreColor(alt.predictedScore), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ color: "#fff", fontWeight: 800, fontSize: 11 }}>{alt.predictedScore}</span>
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
+        {/* Try These Instead */}
+        {rating.alternatives?.length > 0 && (
+          <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, marginBottom: 20, border: "1px solid rgba(163,45,45,0.15)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <p style={{ fontSize: 15, fontWeight: 800, color: "#A32D2D", margin: 0 }}>Try These Instead</p>
             </div>
-          );
-        })()}
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px", lineHeight: 1.5 }}>
+              Based on your health profile, these alternatives may suit you better:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {rating.alternatives.slice(0, 3).map((alt, i) => (
+                <motion.button key={i} whileTap={{ scale: 0.97 }}
+                  onClick={() => { ph.recommendationClicked(foodName, alt.name); if (onRateFood) onRateFood(alt.name); }}
+                  style={{ background: "var(--bg-card)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: onRateFood ? "pointer" : "default", width: "100%", textAlign: "left", boxShadow: "0 1px 8px rgba(83,74,183,0.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 22 }}>🥗</span>
+                    <div>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>{alt.name}</p>
+                      {onRateFood && <p style={{ fontSize: 11, color: "#534AB7", fontWeight: 600, margin: "2px 0 0" }}>Tap to rate this food →</p>}
+                    </div>
+                  </div>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: getScoreColor(alt.predictedScore), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ color: "#fff", fontWeight: 800, fontSize: 11 }}>{alt.predictedScore}</span>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Log button */}
         <div style={{ position: "relative", marginBottom: 12 }}>

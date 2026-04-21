@@ -19,8 +19,13 @@ export function ThemeProvider({ children }) {
     });
   };
 
+  const setTheme = (dark) => {
+    setIsDark(dark);
+    try { localStorage.setItem("flourish_theme", dark ? "dark" : "light"); } catch {}
+  };
+
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

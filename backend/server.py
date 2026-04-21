@@ -373,6 +373,8 @@ class ProfileUpdateRequest(BaseModel):
     struggles: Optional[List[str]] = None
     diet_style: Optional[List[str]] = None
     goal: Optional[str] = Field(default=None, max_length=100)
+    meals_per_day: Optional[str] = Field(default=None, max_length=50)
+    appearance_preference: Optional[str] = Field(default=None, max_length=10)  # "light" | "dark"
 
 class FoodRatingRequest(BaseModel):
     food_name: str = Field(min_length=1, max_length=200)
@@ -619,6 +621,10 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
         update["diet_style"] = data.diet_style
     if data.goal is not None:
         update["goal"] = data.goal
+    if data.meals_per_day is not None:
+        update["meals_per_day"] = data.meals_per_day
+    if data.appearance_preference is not None:
+        update["appearance_preference"] = data.appearance_preference
     await db.users.update_one({"_id": ObjectId(current_user["id"] if "id" in current_user else current_user["_id"])}, {"$set": update})
     return {"success": True}
 
@@ -746,6 +752,7 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
 - Food challenges: {food_challenge}
 - Biggest struggles: {', '.join(struggles) if struggles else 'not specified'}
 - Dietary style: {', '.join(diet_style) if diet_style else 'No restrictions'}
+- Meals per day: {current_user.get("meals_per_day", "not specified")}
 
 Food to rate: {data.food_name}
 {f'Ingredients: {data.ingredients}' if data.ingredients else ''}

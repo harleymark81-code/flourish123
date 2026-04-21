@@ -66,11 +66,11 @@ export default function InsightsScreen({ onOpenPaywall }) {
   const [activeSection, setActiveSection] = useState("progress");
 
   useEffect(() => {
-    if (isPremium) ph.insightsViewed();
+    ph.insightsViewed();
     loadBadges();
     loadWeeklyReport();
     loadCycle();
-    if (isPremium) loadPatterns();
+    loadPatterns();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadBadges = async () => {

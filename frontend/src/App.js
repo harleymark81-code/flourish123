@@ -198,6 +198,10 @@ function AppContent() {
 
   if (!user) return <AuthScreen />;
   if (!user.onboarding_completed) return <Onboarding onComplete={() => refreshUser()} />;
+  // Hard paywall gate — no app access without active trial or subscription
+  if (!user.is_premium && !user.is_admin) {
+    return <Paywall hardGate onClose={() => {}} user={user} entryPoint="hard_gate" />;
+  }
   if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
 
   return (
