@@ -227,7 +227,7 @@ function AppContent() {
             animate={{ y: 0, opacity: 1, transition: { type: "spring", stiffness: 400 } }}
             exit={{ y: -60, opacity: 0 }}
             style={{ position: "fixed", top: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#1A1A24", padding: "12px 20px", zIndex: 9100, textAlign: "center" }}>
-            <p style={{ color: "#fff", fontSize: 14, margin: 0 }}>No worries. Your 3-day free trial is still waiting whenever you are ready.</p>
+            <p style={{ color: "#fff", fontSize: 14, margin: 0 }}>No worries. Your free trial is still waiting whenever you are ready.</p>
           </motion.div>
         )}
       </AnimatePresence>

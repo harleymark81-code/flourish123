@@ -362,13 +362,17 @@ class LoginRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     conditions: List[str]
     goals: List[str]
-    managing_duration: Optional[str] = ""
-    food_challenge: Optional[str] = ""
+    managing_duration: Optional[str] = Field(default="", max_length=100)
+    food_challenge: Optional[str] = Field(default="", max_length=200)
     onboarding_completed: Optional[bool] = True
-    severity: Optional[str] = ""          # mild / moderate / severe
+    severity: Optional[str] = Field(default="", max_length=50)
     current_symptoms: Optional[List[str]] = None
-    medications: Optional[str] = ""
+    medications: Optional[str] = Field(default="", max_length=300)
     cycle_tracking: Optional[bool] = False
+    # Extended onboarding fields
+    struggles: Optional[List[str]] = None
+    diet_style: Optional[List[str]] = None
+    goal: Optional[str] = Field(default=None, max_length=100)
 
 class FoodRatingRequest(BaseModel):
     food_name: str = Field(min_length=1, max_length=200)
@@ -609,6 +613,12 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
     }
     if data.current_symptoms is not None:
         update["current_symptoms"] = data.current_symptoms
+    if data.struggles is not None:
+        update["struggles"] = data.struggles
+    if data.diet_style is not None:
+        update["diet_style"] = data.diet_style
+    if data.goal is not None:
+        update["goal"] = data.goal
     await db.users.update_one({"_id": ObjectId(current_user["id"] if "id" in current_user else current_user["_id"])}, {"$set": update})
     return {"success": True}
 
@@ -617,26 +627,23 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
     today = datetime.now(timezone.utc).date().isoformat()
 
-    today_ratings = await db.diary.count_documents({"user_id": uid, "date": today})
-
     month_start = datetime.now(timezone.utc).replace(day=1).date().isoformat()
     monthly_entries = await db.diary.find({"user_id": uid, "date": {"$gte": month_start}}, {"overall_score": 1}).to_list(500)
     monthly_avg = round(sum(e.get("overall_score", 0) for e in monthly_entries) / len(monthly_entries)) if monthly_entries else 0
 
     streak = current_user.get("streak", 0)
-    is_premium = current_user.get("is_premium", False)
     preview_active = _check_preview_active(current_user)
-    effective_premium = current_user.get("is_admin", False) or is_premium or preview_active
+    effective_premium = _effective_premium(current_user)
+    has_used_free_scan = current_user.get("has_used_free_scan", False)
 
     return {
-        "today_ratings": today_ratings,
-        "daily_limit": FREE_DAILY_RATINGS,
-        "remaining_ratings": max(0, FREE_DAILY_RATINGS - today_ratings) if not effective_premium else None,
         "monthly_avg": monthly_avg,
         "streak": streak,
         "longest_streak": current_user.get("longest_streak", 0),
         "is_premium": effective_premium,
-        "preview_active": preview_active
+        "preview_active": preview_active,
+        "has_used_free_scan": has_used_free_scan,
+        "free_scan_available": not has_used_free_scan and not effective_premium,
     }
 
 def _check_preview_active(user: dict) -> bool:
@@ -663,21 +670,14 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     uid = current_user.get("id") or current_user.get("_id")
     today = datetime.now(timezone.utc).date().isoformat()
 
+    is_free_scan = False
     if not _effective_premium(current_user):
-        today_count = await db.diary.count_documents({"user_id": uid, "date": today})
-        if today_count >= FREE_DAILY_RATINGS:
-            # Send limit-reached nudge once per day (track with scan_limit_email_date)
-            last_sent = current_user.get("scan_limit_email_date", "")
-            if last_sent != today:
-                await db.users.update_one(
-                    {"_id": ObjectId(uid)},
-                    {"$set": {"scan_limit_email_date": today}}
-                )
-                asyncio.create_task(send_scan_limit_email(
-                    to=current_user.get("email", ""),
-                    name=current_user.get("name", ""),
-                ))
-            raise HTTPException(status_code=429, detail=f"Daily limit of {FREE_DAILY_RATINGS} scans reached. Upgrade to Premium for unlimited ratings.")
+        if current_user.get("has_used_free_scan", False):
+            raise HTTPException(
+                status_code=429,
+                detail="Your free scan has been used. Start a free trial to unlock unlimited ratings."
+            )
+        is_free_scan = True
 
     # ── 24h barcode cache check ────────────────────────────────────────────────
     if data.barcode:
@@ -731,14 +731,21 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
 
     system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness. You provide evidence-based food ratings personalised to the user's specific health conditions. You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
 
+    struggles = current_user.get("struggles", [])
+    diet_style = current_user.get("diet_style", [])
+    primary_goal = current_user.get("goal", "") or (goals[0] if goals else "")
+
     user_prompt = f"""Rate this food for a user with the following health profile:
 - Conditions: {', '.join(conditions) if conditions else 'General health'}
 - Severity: {severity if severity else 'not specified'}
 - Current symptoms: {', '.join(current_symptoms) if current_symptoms else 'not specified'}
 - Medications/supplements: {medications if medications else 'none'}
+- Primary goal: {primary_goal if primary_goal else 'General wellness'}
 - Health goals: {', '.join(goals) if goals else 'General wellness'}
 - Managing duration: {managing_duration}
 - Food challenges: {food_challenge}
+- Biggest struggles: {', '.join(struggles) if struggles else 'not specified'}
+- Dietary style: {', '.join(diet_style) if diet_style else 'No restrictions'}
 
 Food to rate: {data.food_name}
 {f'Ingredients: {data.ingredients}' if data.ingredients else ''}
@@ -828,6 +835,13 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
                 )
             except Exception as ce:
                 logger.warning(f"Barcode cache write error: {ce}")
+
+        # Mark free scan as used after a successful rating
+        if is_free_scan:
+            await db.users.update_one(
+                {"_id": ObjectId(uid)},
+                {"$set": {"has_used_free_scan": True}}
+            )
 
         return rating_data
 
@@ -1121,11 +1135,12 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
     referral_code = current_user.get("referred_by", "") or ""
 
     try:
+        trial_days = 7 if data.plan == "annual" else 3
         session = stripe_lib.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card"],
             line_items=[{"price": price_id, "quantity": 1}],
-            subscription_data={"trial_period_days": 3},
+            subscription_data={"trial_period_days": trial_days},
             success_url=success_url,
             cancel_url=cancel_url,
             customer_email=current_user.get("email", "") or None,
@@ -1244,7 +1259,8 @@ async def stripe_webhook(request: Request):
                         # For trials: grant access for trial period only (Stripe revokes via webhook on expiry).
                         # For paid: grant based on plan duration.
                         if is_trial:
-                            expires = (datetime.now(timezone.utc) + timedelta(days=4)).isoformat()
+                            trial_days = 7 if plan == "annual" else 3
+                            expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                         else:
                             expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
                         await db.users.update_one(

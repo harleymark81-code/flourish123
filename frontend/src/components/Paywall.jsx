@@ -25,7 +25,7 @@ const ENTRY_MESSAGES = {
   alternatives: "There are 2 more foods that score better for your condition. See them.",
   swaps: "See personalised food swaps tailored to your exact conditions — rated and ready to try.",
   meal_plan: "Your full day meal plan is ready.",
-  scan_limit: "You've used all 3 free scans for today. Upgrade to scan unlimited foods every day.",
+  scan_limit: "Your free scan has been used. Start a free trial to unlock unlimited ratings every day.",
   symptoms: "Symptom tracking is a Premium feature. Log how you feel daily and uncover patterns between food and your health.",
   favourites: "You've reached the 3-favourite limit on the free plan. Upgrade to save unlimited foods.",
   history: "See your full scan history, filter by score, and track what you eat over time.",
@@ -186,8 +186,12 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
 
             {/* Free trial badge */}
             <div style={{ background: "linear-gradient(135deg, #639922, #7ab82a)", borderRadius: 14, padding: "14px 20px", textAlign: "center", marginBottom: 20, boxShadow: "0 4px 16px rgba(99,153,34,0.25)" }}>
-              <p style={{ color: "#fff", fontWeight: 800, fontSize: 17, margin: 0, letterSpacing: "-0.01em" }}>3-day free trial — cancel anytime</p>
-              <p style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, margin: "2px 0 0" }}>No charge until day 4. Cancel in one tap.</p>
+              <p style={{ color: "#fff", fontWeight: 800, fontSize: 17, margin: 0, letterSpacing: "-0.01em" }}>
+                {plan === "annual" ? "7-day free trial — cancel anytime" : "3-day free trial — cancel anytime"}
+              </p>
+              <p style={{ color: "rgba(255,255,255,0.88)", fontSize: 13, margin: "2px 0 0" }}>
+                {plan === "annual" ? "No charge until day 8. Cancel in one tap." : "No charge until day 4. Cancel in one tap."}
+              </p>
             </div>
 
             {/* Headline */}
@@ -336,7 +340,7 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
                 marginBottom: 12, letterSpacing: "-0.01em",
                 minHeight: 60
               }}>
-              {authLoading ? "Checking your account..." : loading ? "Creating your trial..." : !user ? "Sign in to continue" : "Start 3-Day Free Trial →"}
+              {authLoading ? "Checking your account..." : loading ? "Creating your trial..." : !user ? "Sign in to continue" : plan === "annual" ? "Start 7-Day Free Trial →" : "Start 3-Day Free Trial →"}
             </motion.button>
 
             <button data-testid="maybe-later-btn" onClick={handleClose}
