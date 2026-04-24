@@ -18,7 +18,7 @@ function formatDate(dateStr) {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-export default function FoodDiary({ onOpenPaywall }) {
+export default function FoodDiary() {
   const { user, getHeaders, API } = useAuth();
 
   // Always call hooks — no early return before hooks

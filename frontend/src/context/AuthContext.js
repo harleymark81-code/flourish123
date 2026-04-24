@@ -23,17 +23,12 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
-    // Try cookie-based auth first (withCredentials is set globally).
-    // If a legacy localStorage token exists, send it as fallback and then
-    // migrate to cookie-only by removing it from localStorage.
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
     axios.get(`${API}/auth/me`, { headers })
       .then(res => {
         setUser(res.data);
         identifyUser(res.data);
-        // Migrate: clear localStorage token now that the cookie is active.
-        if (token) localStorage.removeItem(TOKEN_KEY);
       })
       .catch(() => {
         localStorage.removeItem(TOKEN_KEY);
@@ -58,8 +53,9 @@ export function AuthProvider({ children }) {
     const res = await axios.post(`${API}/auth/register`, payload, {
       headers: { "Content-Type": "application/json" },
     });
-    const { user: u } = res.data;
-    // Token is set as an httpOnly cookie by the server — do not store in localStorage.
+    const { user: u, token } = res.data;
+    // Persist token in localStorage so auth survives page refreshes on any browser/PWA.
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     localStorage.removeItem("fl_ref"); // consumed — clear so it doesn't affect future signups
     setUser(u);
     identifyUser(u);
@@ -89,8 +85,9 @@ export function AuthProvider({ children }) {
       { email: email.trim().toLowerCase(), password },
       { headers: { "Content-Type": "application/json" } }
     );
-    const { user: u } = res.data;
-    // Token is set as an httpOnly cookie by the server — do not store in localStorage.
+    const { user: u, token } = res.data;
+    // Persist token in localStorage so auth survives page refreshes on any browser/PWA.
+    if (token) localStorage.setItem(TOKEN_KEY, token);
     setUser(u);
     identifyUser(u);
     ph.userLoggedIn();

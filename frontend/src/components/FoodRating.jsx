@@ -198,7 +198,7 @@ function DimensionCard({ label, score, summary, why }) {
   );
 }
 
-export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }) {
+export default function FoodRating({ rating, onBack, onRateFood }) {
   const { user, getHeaders, API } = useAuth();
   const [logged, setLogged] = useState(false);
   const [particles, setParticles] = useState([]);
@@ -225,11 +225,7 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
       setIsFavourite(res.data.saved);
       ph.favouriteToggled(foodName, res.data.saved);
     } catch (e) {
-      if (e.response?.status === 403) {
-        onOpenPaywall && onOpenPaywall("favourites");
-      } else {
-        console.error("[Flourish] toggleFavourite error:", e);
-      }
+      console.error("[Flourish] toggleFavourite error:", e);
     } finally {
       setSavingFav(false);
     }
@@ -266,13 +262,8 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
       ph.ratingSaved(rating.food_name || rating.name, rating.overallScore);
       ph.diaryEntryAdded(rating.food_name || rating.name, rating.overallScore);
     } catch (e) {
-      if (e.response?.status === 403) {
-        ph.diaryLockedHit();
-        onOpenPaywall && onOpenPaywall("diary");
-      } else {
-        ph.apiError("/diary/log", e.message, e.response?.status);
-        console.error("[Flourish] handleLog error:", e);
-      }
+      ph.apiError("/diary/log", e.message, e.response?.status);
+      console.error("[Flourish] handleLog error:", e);
       return;
     }
     try {
@@ -479,17 +470,6 @@ export default function FoodRating({ rating, onBack, onOpenPaywall, onRateFood }
           ))}
         </div>
 
-        {/* Upgrade banner */}
-        {!isPremium && (
-          <motion.div whileTap={{ scale: 0.97 }} onClick={() => onOpenPaywall("default")}
-            style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 14, padding: "14px 18px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", boxShadow: "0 4px 16px rgba(83,74,183,0.22)" }}>
-            <div>
-              <p style={{ color: "#fff", fontWeight: 800, fontSize: 14, margin: "0 0 2px" }}>Unlock the full analysis</p>
-              <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, margin: 0 }}>Start your 3-day free trial</p>
-            </div>
-            <ChevronRight size={20} color="#fff" />
-          </motion.div>
-        )}
 
         <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6, marginTop: 8 }}>
           AI powered nutritional guidance. Always consult your doctor or healthcare provider for medical advice.

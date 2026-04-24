@@ -17,6 +17,7 @@ import AffiliateDashboard from "./pages/AffiliateDashboard";
 import InsightsScreen from "./components/InsightsScreen";
 import MyFoodsScreen from "./components/MyFoodsScreen";
 import ResetPassword from "./components/ResetPassword";
+import FreeScanScreen from "./components/FreeScanScreen";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -103,13 +104,11 @@ function StripeReturn() {
 }
 
 function AppContent() {
-  const { user, loading, refreshUser } = useAuth();
+  const { user, loading, refreshUser, isPremium } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [showSplash, setShowSplash] = useState(!sessionStorage.getItem("splash_shown"));
   const [activeTab, setActiveTab] = useState("scan");
   const [pendingFoodName, setPendingFoodName] = useState(null);
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [paywallEntry, setPaywallEntry] = useState("default");
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
   const [showCancelledMsg, setShowCancelledMsg] = useState(false);
   const [showPaymentPending, setShowPaymentPending] = useState(false);
@@ -117,13 +116,6 @@ function AppContent() {
   const [editingProfile, setEditingProfile] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-
-  const openPaywall = (entryPoint = "default") => {
-    setPaywallEntry(entryPoint);
-    setShowPaywall(true);
-    ph.paywallHit(entryPoint);
-    ph.upgradeModalViewed(entryPoint);
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -145,8 +137,6 @@ function AppContent() {
     }
     if (params.get("cancelled") === "true") {
       setShowCancelledMsg(true);
-      setShowPaywall(true);
-      setPaywallEntry("default");
       setTimeout(() => setShowCancelledMsg(false), 6000);
       window.history.replaceState({}, "", "/");
     }
@@ -198,8 +188,12 @@ function AppContent() {
 
   if (!user) return <AuthScreen />;
   if (!user.onboarding_completed) return <Onboarding onComplete={() => refreshUser()} />;
+  // Free scan step — user must experience Flourish before the paywall
+  if (!user.has_used_free_scan && !isPremium) {
+    return <FreeScanScreen onComplete={() => refreshUser()} />;
+  }
   // Hard paywall gate — no app access without active trial or subscription
-  if (!user.is_premium && !user.is_admin) {
+  if (!isPremium) {
     return <Paywall hardGate onClose={() => {}} user={user} entryPoint="hard_gate" />;
   }
   if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
@@ -240,27 +234,27 @@ function AppContent() {
       <AnimatePresence mode="wait">
         {activeTab === "scan" && (
           <motion.div key="scan" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} onOpenPaywall={openPaywall} pendingFoodName={pendingFoodName} onPendingFoodConsumed={() => setPendingFoodName(null)} />
+            <HomeScreen onNavigate={(tab) => setActiveTab(tab)} pendingFoodName={pendingFoodName} onPendingFoodConsumed={() => setPendingFoodName(null)} />
           </motion.div>
         )}
         {activeTab === "diary" && (
           <motion.div key="diary" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <FoodDiary onOpenPaywall={openPaywall} />
+            <FoodDiary />
           </motion.div>
         )}
         {activeTab === "insights" && (
           <motion.div key="insights" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <InsightsScreen onOpenPaywall={openPaywall} />
+            <InsightsScreen />
           </motion.div>
         )}
         {activeTab === "myfoods" && (
           <motion.div key="myfoods" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <MyFoodsScreen onOpenPaywall={openPaywall} onRateFood={(name) => { setPendingFoodName(name); setActiveTab("scan"); }} />
+            <MyFoodsScreen onRateFood={(name) => { setPendingFoodName(name); setActiveTab("scan"); }} />
           </motion.div>
         )}
         {activeTab === "profile" && (
           <motion.div key="profile" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ type: "spring", damping: 25, stiffness: 280 }}>
-            <ProfileScreen onOpenPaywall={openPaywall} onEditProfile={() => setEditingProfile(true)} />
+            <ProfileScreen onEditProfile={() => setEditingProfile(true)} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -294,17 +288,6 @@ function AppContent() {
           <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)" }}>{isDark ? "Light" : "Dark"}</span>
         </motion.button>
       </div>
-
-      {/* Paywall */}
-      <AnimatePresence>
-        {showPaywall && (
-          <Paywall
-            onClose={() => setShowPaywall(false)}
-            user={user}
-            entryPoint={paywallEntry}
-          />
-        )}
-      </AnimatePresence>
 
       {/* Upgrade success */}
       <AnimatePresence>

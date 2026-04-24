@@ -147,7 +147,7 @@ const NUDGE_MESSAGES = [
   "Still guessing? For £12.99 a month, that's the most expensive thing you own.",
 ];
 
-export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName, onPendingFoodConsumed }) {
+export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodConsumed }) {
   const { user, getHeaders, API } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [stats, setStats] = useState(null);
@@ -702,7 +702,7 @@ export default function HomeScreen({ onNavigate, onOpenPaywall, pendingFoodName,
       {/* Modals */}
       <AnimatePresence>
         {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
-        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} isPremium={true} />}
+        {showMealPlanner && <MealPlanner onClose={() => setShowMealPlanner(false)} onRateFood={rateFood} />}
         {showSymptoms && <SymptomTracker onClose={() => { setShowSymptoms(false); checkBadges(); }} />}
         {showSubscription && <SubscriptionScreen onClose={() => setShowSubscription(false)} onUpgrade={() => setShowSubscription(false)} />}
         {showHistory && (

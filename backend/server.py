@@ -76,7 +76,7 @@ from services.email import (
     send_welcome_email,
     send_subscription_confirmed_email,
     send_trial_ending_email,
-    send_scan_limit_email,
+
     send_referral_reward_email,
     send_password_reset_email,
     send_weekly_report_email,
@@ -130,8 +130,6 @@ db = client[os.environ['DB_NAME']]
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 JWT_ALGORITHM = "HS256"
-FREE_DAILY_RATINGS = 3
-FREE_DAILY_SCANS = 3
 IS_PRODUCTION = os.environ.get("ENVIRONMENT", "").lower() == "production"
 
 # ── Admin token (set ADMIN_SESSION_TOKEN in Railway env vars) ─────────────────
@@ -478,6 +476,7 @@ async def register(request: Request, data: RegisterRequest):
         "managing_duration": "",
         "food_challenge": "",
         "onboarding_completed": False,
+        "has_used_free_scan": False,
         "is_premium": False,
         "premium_plan": None,
         "premium_expires_at": None,
@@ -680,8 +679,8 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     if not _effective_premium(current_user):
         if current_user.get("has_used_free_scan", False):
             raise HTTPException(
-                status_code=429,
-                detail="Your free scan has been used. Start a free trial to unlock unlimited ratings."
+                status_code=403,
+                detail="An active subscription is required. Please start your free trial to continue."
             )
         is_free_scan = True
 
@@ -1691,11 +1690,6 @@ async def toggle_favourite(data: FavouriteRequest, current_user: dict = Depends(
     if existing:
         await db.favourites.delete_one({"_id": existing["_id"]})
         return {"saved": False}
-    # Free users limited to 3 favourites
-    if not _effective_premium(current_user):
-        count = await db.favourites.count_documents({"user_id": uid})
-        if count >= 3:
-            raise HTTPException(status_code=403, detail="Free users can save up to 3 favourites. Upgrade to Premium for unlimited.")
     doc = {
         "user_id": uid,
         "food_name": data.food_name,
@@ -1715,21 +1709,17 @@ async def check_favourite(food_name: str, current_user: dict = Depends(get_curre
 @api_router.get("/scan-history")
 async def get_scan_history(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
-    is_premium = _effective_premium(current_user)
-    limit = 200 if is_premium else 5
     entries = await db.diary.find(
         {"user_id": uid},
         {"food_name": 1, "overall_score": 1, "verdict": 1, "date": 1, "logged_at": 1,
          "barcode": 1, "product_image": 1, "dimensions": 1, "flags": 1,
          "forYourCondition": 1, "alternatives": 1, "bodySystemsAffected": 1, "scan_id": 1}
-    ).sort("logged_at", -1).to_list(limit)
-    return {"history": [doc_to_dict(e) for e in entries], "is_premium": is_premium}
+    ).sort("logged_at", -1).to_list(200)
+    return {"history": [doc_to_dict(e) for e in entries]}
 
 # ── SHOPPING LIST ─────────────────────────────────────────────────────────────
 @api_router.get("/shopping-list")
 async def get_shopping_list(current_user: dict = Depends(get_current_user)):
-    if not _effective_premium(current_user):
-        raise HTTPException(status_code=403, detail="Shopping list is a Premium feature.")
     uid = current_user.get("id") or current_user.get("_id")
     doc = await db.shopping_list.find_one({"user_id": uid})
     items = doc.get("items", []) if doc else []
@@ -1737,8 +1727,6 @@ async def get_shopping_list(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/shopping-list/add")
 async def add_shopping_item(data: ShoppingItemRequest, current_user: dict = Depends(get_current_user)):
-    if not _effective_premium(current_user):
-        raise HTTPException(status_code=403, detail="Shopping list is a Premium feature.")
     uid = current_user.get("id") or current_user.get("_id")
     item = {
         "id": str(uuid.uuid4()),

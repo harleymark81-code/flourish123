@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, RefreshCw, Lock, ChevronRight } from "lucide-react";
+import { X, RefreshCw, ChevronRight } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
@@ -11,7 +11,7 @@ function getScoreColor(s) {
   return "#A32D2D";
 }
 
-export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPaywall }) {
+export default function MealPlanner({ onClose, onRateFood }) {
   const { getHeaders, API } = useAuth();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -26,12 +26,7 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
       const res = await axios.post(`${API}/food/meal-plan`, {}, { headers: getHeaders(), withCredentials: true });
       setPlan(res.data);
     } catch (e) {
-      if (e.response?.status === 403) {
-        onClose();
-        onOpenPaywall && onOpenPaywall("meal_plan");
-      } else {
-        setFetchError(true);
-      }
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -96,17 +91,6 @@ export default function MealPlanner({ onClose, onRateFood, isPremium, onOpenPayw
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0, transition: { delay: i * 0.08 } }}
                 style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", position: "relative" }}>
-                {!isPremium && meal.key !== "breakfast" && (
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(248,247,255,0.9)", borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 5 }}>
-                    <div style={{ textAlign: "center" }}>
-                      <Lock size={20} color="#534AB7" style={{ marginBottom: 6 }} />
-                      <p style={{ fontSize: 12, color: "#534AB7", fontWeight: 600, margin: "0 0 8px" }}>Premium meal</p>
-                      <button onClick={onOpenPaywall} style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
-                        Unlock
-                      </button>
-                    </div>
-                  </div>
-                )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <span style={{ fontSize: 32 }}>{meal.emoji}</span>

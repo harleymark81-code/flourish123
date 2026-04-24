@@ -204,7 +204,7 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
   );
 }
 
-export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
+export default function ProfileScreen({ onEditProfile }) {
   const { user, isPremium, logout, getHeaders, API } = useAuth();
   const [stats, setStats] = useState(null);
   const [referralStats, setReferralStats] = useState(null);
@@ -372,26 +372,8 @@ export default function ProfileScreen({ onOpenPaywall, onEditProfile }) {
           </div>
         )}
 
-        {/* Premium Upgrade */}
-        {!isPremium && (
-          <motion.div
-            data-testid="upgrade-premium-btn"
-            whileTap={{ scale: 0.97 }}
-            onClick={onOpenPaywall}
-            style={{ background: "linear-gradient(135deg, #F59E0B, #D97706)", borderRadius: 16, padding: 20, marginBottom: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <Crown size={20} color="#fff" />
-                <p style={{ color: "#fff", fontWeight: 700, fontSize: 16, margin: 0 }}>Upgrade to Premium</p>
-              </div>
-              <p style={{ color: "rgba(255,255,255,0.85)", fontSize: 13, margin: 0 }}>Start your 3-day free trial</p>
-            </div>
-            <ChevronRight size={20} color="#fff" />
-          </motion.div>
-        )}
-
-        {/* Referral — Premium only */}
-        {isPremium && referralStats && (
+        {/* Referral */}
+        {referralStats && (
           <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)" }}>
             <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 12px" }}>Refer friends & earn</p>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px" }}>Earn one free month of Premium for every paying referral.</p>
