@@ -1188,7 +1188,7 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
 
 @api_router.get("/payments/status/{session_id}")
 async def get_payment_status(session_id: str, request: Request, current_user: dict = Depends(get_current_user)):
-    """Polling endpoint — reads payment status only. User upgrades are handled exclusively by the webhook."""
+    """Polling endpoint — reads payment status from Stripe and upgrades the user if confirmed paid."""
     stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
     # Check if already processed by webhook
@@ -1203,12 +1203,35 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
         is_success = (payment_status in ["paid", "no_payment_required"] and status == "complete") or payment_status == "paid"
 
         if is_success:
-            # Mark transaction as complete — do NOT upgrade the user here; let the webhook do it
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
                 {"$set": {"status": "complete", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}},
                 upsert=False
             )
+            # Upgrade the user immediately — don't wait for the webhook (race condition: frontend
+            # calls refreshUser() right after this returns, before the webhook has fired).
+            # The webhook will repeat the same $set later, which is idempotent.
+            if transaction:
+                user_id = transaction.get("user_id")
+                plan = transaction.get("plan", "monthly")
+                if user_id:
+                    is_trial = (payment_status == "no_payment_required")
+                    if is_trial:
+                        trial_days = 7 if plan == "annual" else 3
+                        expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
+                    else:
+                        expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
+                    await db.users.update_one(
+                        {"_id": ObjectId(user_id)},
+                        {"$set": {
+                            "is_premium": True,
+                            "premium_plan": plan,
+                            "premium_since": datetime.now(timezone.utc).isoformat(),
+                            "premium_expires_at": expires,
+                            "is_trialing": is_trial,
+                        }}
+                    )
+                    logger.info(f"User {user_id} upgraded to premium via status poll (plan: {plan})")
 
         return {"status": status, "payment_status": payment_status, "is_success": is_success}
     except Exception as e:
