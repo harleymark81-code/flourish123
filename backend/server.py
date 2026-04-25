@@ -1029,41 +1029,102 @@ async def get_patterns(current_user: dict = Depends(get_current_user)):
     if not _effective_premium(current_user):
         raise HTTPException(status_code=403, detail="Premium feature")
 
-    two_weeks_ago = (datetime.now(timezone.utc).date() - timedelta(days=14)).isoformat()
-    diary_entries = await db.diary.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}, {"food_name": 1, "overall_score": 1, "date": 1}).to_list(300)
-    symptom_entries = await db.symptoms.find({"user_id": uid, "date": {"$gte": two_weeks_ago}}, {"energy": 1, "bloating": 1, "date": 1}).to_list(100)
+    total_diary = await db.diary.count_documents({"user_id": uid})
+    if total_diary < 7:
+        return {"patterns": [], "total_diary": total_diary, "needed": 7}
 
-    if len(diary_entries) < 5:
-        return {"patterns": [], "message": "Keep logging your food to unlock patterns after 14 days."}
+    now = datetime.now(timezone.utc)
+
+    # Serve from cache if < 7 days old and < 5 new logs since last generation
+    cached = await db.pattern_cache.find_one({"user_id": uid})
+    if cached:
+        try:
+            raw = cached.get("generated_at", "")
+            cached_at = datetime.fromisoformat(raw) if isinstance(raw, str) else raw
+            if cached_at.tzinfo is None:
+                cached_at = cached_at.replace(tzinfo=timezone.utc)
+            age_days = (now - cached_at).days
+            count_delta = total_diary - cached.get("diary_count_at_generation", 0)
+            if age_days < 7 and count_delta < 5:
+                return {"patterns": cached["patterns"], "total_diary": total_diary, "needed": 7}
+        except Exception:
+            pass
+
+    thirty_ago = (now.date() - timedelta(days=30)).isoformat()
+    diary_entries = await db.diary.find(
+        {"user_id": uid, "date": {"$gte": thirty_ago}},
+        {"food_name": 1, "overall_score": 1, "date": 1}
+    ).sort("date", -1).to_list(200)
+
+    symptom_entries = await db.symptoms.find(
+        {"user_id": uid, "date": {"$gte": thirty_ago}},
+        {"energy": 1, "bloating": 1, "brain_fog": 1, "mood": 1, "date": 1}
+    ).sort("date", -1).to_list(60)
 
     conditions = current_user.get("conditions", [])
+    conditions_str = ", ".join(conditions) if conditions else "general health"
+
+    diary_by_date: dict = {}
+    for e in diary_entries:
+        d = e.get("date", "")
+        diary_by_date.setdefault(d, []).append(f"{e.get('food_name', '')} ({e.get('overall_score', 0)})")
+
+    diary_lines = "\n".join(
+        f"{date}: {', '.join(foods)}"
+        for date, foods in sorted(diary_by_date.items(), reverse=True)
+    )[:3000]
+
+    symptom_lines = "\n".join(
+        f"{e.get('date', '')}: energy={e.get('energy', '?')}, bloating={e.get('bloating', '?')}, brain_fog={e.get('brain_fog', '?')}, mood={e.get('mood', '?')}"
+        for e in symptom_entries
+    )[:2000]
 
     try:
-        diary_summary = [(e.get("food_name", ""), e.get("overall_score", 0), e.get("date", "")) for e in diary_entries[:20]]
-        symptom_summary = [(e.get("energy", 0), e.get("bloating", 0), e.get("date", "")) for e in symptom_entries[:14]]
-
         response = await call_anthropic(
-            "You are a nutritional analyst. Identify patterns between food and health symptoms.",
-            f"""Analyse these food and symptom patterns for someone with {', '.join(conditions)}:
-Food diary (food, score, date): {diary_summary[:10]}
-Symptoms (energy, bloating, date): {symptom_summary[:7]}
+            f"You are a personal health analyst specialising in {conditions_str}. Find genuine data-backed correlations between specific foods and symptoms. Always cite actual food names and actual numbers from the data. Never give generic advice. Return only valid JSON.",
+            f"""User conditions: {conditions_str}
 
-Return 3 specific insights as JSON array: [{{"insight": "<2 sentence finding>", "type": "<positive|negative|neutral>"}}]
-Only return the JSON array, no other text."""
+FOOD DIARY (food name, score 0-100):
+{diary_lines if diary_lines else 'No food data'}
+
+SYMPTOM LOGS (1=worst, 5=best):
+{symptom_lines if symptom_lines else 'No symptom data'}
+
+Identify 3 genuine patterns. Each must reference actual foods and/or actual symptom numbers from the logs above.
+Return ONLY a JSON array, no markdown:
+[
+  {{
+    "headline": "<bold 8-word max finding, e.g. 'Gluten days linked to 40% worse bloating'>",
+    "explanation": "<1 sentence citing specific foods and numbers from this data>",
+    "action": "<1 concrete behaviour change to try this week>",
+    "type": "<positive|negative|neutral>",
+    "data_points": <integer: number of diary/symptom entries supporting this finding>
+  }}
+]"""
         )
 
-        response_text = response.strip()
-        if response_text.startswith("```"):
-            parts = response_text.split("```")
-            response_text = parts[1] if len(parts) > 1 else response_text
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
+        text = response.strip()
+        if text.startswith("```"):
+            parts = text.split("```")
+            text = parts[1] if len(parts) > 1 else text
+            if text.startswith("json"):
+                text = text[4:]
 
-        patterns = json.loads(response_text)
-        return {"patterns": patterns}
+        patterns_list = json.loads(text)
+        if not isinstance(patterns_list, list):
+            raise ValueError("Expected list")
+
+        await db.pattern_cache.update_one(
+            {"user_id": uid},
+            {"$set": {"patterns": patterns_list, "generated_at": now.isoformat(), "diary_count_at_generation": total_diary}},
+            upsert=True
+        )
+        return {"patterns": patterns_list, "total_diary": total_diary, "needed": 7}
     except Exception as e:
-        logger.error(f"Patterns error: {e}")
-        return {"patterns": [{"insight": "Keep logging consistently to see your personal food-symptom patterns emerge.", "type": "neutral"}]}
+        logger.error(f"Patterns AI error: {e}")
+        if cached and cached.get("patterns"):
+            return {"patterns": cached["patterns"], "total_diary": total_diary, "needed": 7}
+        return {"patterns": [], "total_diary": total_diary, "needed": 7, "message": "Analysis unavailable right now. Keep logging!"}
 
 # ── SYMPTOMS ───────────────────────────────────────────────────────────────────
 @api_router.post("/symptoms")
@@ -1103,6 +1164,69 @@ async def get_today_symptoms(current_user: dict = Depends(get_current_user)):
     if entry:
         return doc_to_dict(entry)
     return None
+
+@api_router.get("/insights/symptom-history")
+async def get_symptom_history(current_user: dict = Depends(get_current_user)):
+    if not _effective_premium(current_user):
+        raise HTTPException(status_code=403, detail="Premium feature")
+    uid = current_user.get("id") or current_user.get("_id")
+
+    eight_weeks_ago = (datetime.now(timezone.utc).date() - timedelta(days=56)).isoformat()
+    entries = await db.symptoms.find(
+        {"user_id": uid, "date": {"$gte": eight_weeks_ago}},
+        {"energy": 1, "bloating": 1, "brain_fog": 1, "mood": 1, "skin": 1, "date": 1}
+    ).sort("date", 1).to_list(200)
+
+    if not entries:
+        return {"weeks": [], "symptom_summaries": {}, "has_data": False}
+
+    SYMS = ["energy", "bloating", "brain_fog", "mood", "skin"]
+
+    week_buckets: dict = {}
+    for entry in entries:
+        try:
+            d = datetime.strptime(entry["date"], "%Y-%m-%d").date()
+            week_start = (d - timedelta(days=d.weekday())).isoformat()
+            week_buckets.setdefault(week_start, []).append(entry)
+        except Exception:
+            continue
+
+    sorted_weeks = sorted(week_buckets.keys())[-8:]
+    weeks_out = []
+    for wk in sorted_weeks:
+        wk_entries = week_buckets[wk]
+        week_end = (datetime.strptime(wk, "%Y-%m-%d").date() + timedelta(days=6)).isoformat()
+        avgs = {}
+        for sym in SYMS:
+            vals = [e[sym] for e in wk_entries if e.get(sym) is not None]
+            avgs[sym] = round(sum(vals) / len(vals), 1) if vals else None
+        daily = {e["date"]: {sym: e.get(sym) for sym in SYMS} for e in wk_entries}
+        weeks_out.append({"week_start": wk, "week_end": week_end, "avgs": avgs, "days": daily, "check_ins": len(wk_entries)})
+
+    # Trend per symptom: compare second half avg vs first half avg of available weeks
+    symptom_summaries = {}
+    for sym in SYMS:
+        series = [w["avgs"][sym] for w in weeks_out if w["avgs"].get(sym) is not None]
+        if len(series) < 2:
+            symptom_summaries[sym] = {"trend": "flat", "summary": None}
+            continue
+        half = max(1, len(series) // 2)
+        first_avg = sum(series[:half]) / half
+        second_avg = sum(series[half:]) / len(series[half:])
+        # Bloating: lower = better; everything else: higher = better
+        delta = (first_avg - second_avg) if sym == "bloating" else (second_avg - first_avg)
+        pct = round(abs(delta / first_avg) * 100) if first_avg else 0
+        trend = "improving" if delta > 0.3 else "declining" if delta < -0.3 else "flat"
+        label = sym.replace("_", " ")
+        if trend == "improving" and pct >= 5:
+            summary = f"Your {label} has improved {pct}% over recent weeks — keep it up."
+        elif trend == "declining" and pct >= 5:
+            summary = f"Your {label} has declined {pct}% recently — your food choices may be a factor."
+        else:
+            summary = f"Your {label} has been consistent recently."
+        symptom_summaries[sym] = {"trend": trend, "summary": summary}
+
+    return {"weeks": weeks_out, "symptom_summaries": symptom_summaries, "has_data": True}
 
 # ── STREAK / REWARDS ───────────────────────────────────────────────────────────
 @api_router.get("/streak/reward")
