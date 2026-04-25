@@ -174,7 +174,7 @@ const LOADING_MSGS = [
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function Onboarding({ onComplete }) {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, logout } = useAuth();
   const { isDark, setTheme } = useTheme();
 
   const [screen, setScreen] = useState(1);
@@ -359,7 +359,11 @@ export default function Onboarding({ onComplete }) {
                 style={{ width: "100%", background: `linear-gradient(135deg, ${PRI}, #756AD9)`, color: "#fff", border: "none", borderRadius: 14, padding: "20px 24px", fontSize: 18, fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 30px rgba(83,74,183,0.4)", letterSpacing: "-0.01em" }}>
                 Get started
               </motion.button>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "18px 0 0" }}>Free to try. No card needed to start.</p>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "18px 0 8px" }}>Free to try. No card needed to start.</p>
+              <button onClick={logout}
+                style={{ background: "none", border: "none", color: PRI, fontSize: 14, fontWeight: 600, cursor: "pointer", padding: "4px 0" }}>
+                Already have an account? Log in
+              </button>
             </motion.div>
           )}
 

@@ -316,15 +316,6 @@ export default function FoodRating({ rating, onBack, onRateFood }) {
       </div>
 
       <div style={{ padding: "20px 20px 0" }}>
-        {/* Food image */}
-        <div style={{ width: "100%", height: 180, borderRadius: 18, background: "var(--bg-card)", border: "1px solid var(--border)", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", boxShadow: "0 2px 16px rgba(83,74,183,0.10)" }}>
-          {rating.product_image ? (
-            <img src={rating.product_image} alt={rating.food_name} style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.target.style.display = "none"; }} />
-          ) : (
-            <span style={{ fontSize: 88 }}>🍽️</span>
-          )}
-        </div>
-
         {/* Score + name */}
         <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 16 }}>
           <ScoreCircle score={rating.overallScore} size={92} />
@@ -410,8 +401,8 @@ export default function FoodRating({ rating, onBack, onRateFood }) {
           })}
         </div>
 
-        {/* Try These Instead */}
-        {rating.alternatives?.length > 0 && (
+        {/* Try These Instead — only shown for amber/red scores */}
+        {rating.alternatives?.length > 0 && rating.overallScore < 70 && (
           <div style={{ background: "rgba(163,45,45,0.06)", borderRadius: 16, padding: 16, marginBottom: 20, border: "1px solid rgba(163,45,45,0.15)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <span style={{ fontSize: 18 }}>⚠️</span>

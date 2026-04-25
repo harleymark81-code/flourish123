@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Crown, Check, Star, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Crown, Check, Star, ChevronDown, ChevronUp, ArrowLeft } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
@@ -88,7 +88,7 @@ function ConfettiBurst() {
 }
 
 export default function Paywall({ onClose, user: userProp, entryPoint = "default", hardGate = false }) {
-  const { getHeaders, API, refreshUser, user: authUser, loading: authLoading } = useAuth();
+  const { getHeaders, API, refreshUser, logout, user: authUser, loading: authLoading } = useAuth();
   const user = authUser || userProp;
   const [plan, setPlan] = useState("annual");
   const [loading, setLoading] = useState(false);
@@ -162,18 +162,24 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
 
           {/* Sticky header */}
           <div style={{ position: "sticky", top: 0, background: "var(--header-sticky)", backdropFilter: "blur(20px)", padding: "16px 20px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)", zIndex: 10 }}>
+            {!hardGate ? (
+              <motion.button whileTap={{ scale: 0.88 }} onClick={handleClose}
+                style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", padding: 0 }}>
+                <ArrowLeft size={22} color="#6B6A7C" />
+              </motion.button>
+            ) : <div style={{ width: 22 }} />}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #F6D365, #FDA085)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Crown size={14} color="#fff" />
               </div>
               <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.02em" }}>Flourish Premium</span>
             </div>
-            {!hardGate && (
+            {!hardGate ? (
               <motion.button data-testid="paywall-close-btn" whileTap={{ scale: 0.88 }} onClick={handleClose}
                 style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
                 <X size={16} color="#6B6A7C" />
               </motion.button>
-            )}
+            ) : <div style={{ width: 36 }} />}
           </div>
 
           <div style={{ padding: "20px 20px 0" }}>
@@ -352,7 +358,14 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
               </button>
             )}
 
-            <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6, marginTop: 16 }}>
+            <p style={{ textAlign: "center", marginTop: 20, marginBottom: 4 }}>
+              <button onClick={logout}
+                style={{ background: "none", border: "none", color: "#534AB7", fontSize: 14, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                Already have an account? Log in
+              </button>
+            </p>
+
+            <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.6, marginTop: 12 }}>
               Flourish provides AI powered nutritional guidance. Not a substitute for medical advice.
             </p>
           </div>

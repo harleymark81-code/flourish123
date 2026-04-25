@@ -773,6 +773,8 @@ Food to rate: {data.food_name}
 {f'Ingredients: {data.ingredients}' if data.ingredients else ''}
 (Suggestion seed: {uuid.uuid4().hex[:8]} — always suggest fresh, varied alternatives not previously suggested)
 
+ALTERNATIVES RULE: Each alternative MUST genuinely score higher than {data.food_name} for this user's exact conditions ({', '.join(conditions) if conditions else 'general health'}). Do NOT suggest foods that are only generically healthy — each alternative must specifically address this user's primary condition(s) and goals. Each predictedScore must reflect what that food would actually score for this user's profile, and must exceed the overallScore of {data.food_name}.
+
 Return ONLY this exact JSON structure (no markdown, no extra text):
 {{
   "name": "{data.food_name}",
