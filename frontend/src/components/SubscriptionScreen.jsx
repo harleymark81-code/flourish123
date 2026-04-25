@@ -1,15 +1,8 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { X, Crown, Check, ChevronRight, Loader } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
-
-const FEATURES_FREE = [
-  "3 food ratings per day",
-  "Overall score + Naturalness dimension",
-  "First warning flag",
-  "Daily AI food tip",
-];
 
 const FEATURES_PREMIUM = [
   "Unlimited food ratings",
@@ -22,29 +15,13 @@ const FEATURES_PREMIUM = [
   "Barcode scanner",
 ];
 
-export default function SubscriptionScreen({ onClose, onUpgrade }) {
-  const { user, isPremium, getHeaders, API } = useAuth();
+export default function SubscriptionScreen({ onClose }) {
+  const { user, getHeaders, API } = useAuth();
   const [loadingPortal, setLoadingPortal] = useState(false);
-  const [loadingCheckout, setLoadingCheckout] = useState(null);
   const [error, setError] = useState("");
 
   const planLabel = user?.premium_plan === "annual" ? "Annual" : "Monthly";
   const planPrice = user?.premium_plan === "annual" ? "£49.99/year" : "£12.99/month";
-
-  const handleCheckout = async (plan) => {
-    setLoadingCheckout(plan);
-    setError("");
-    try {
-      const res = await axios.post(`${API}/payments/checkout`, {
-        plan,
-        origin_url: window.location.origin,
-      }, { headers: getHeaders(), withCredentials: true });
-      window.location.href = res.data.url;
-    } catch (e) {
-      setError(e.response?.data?.detail || "Failed to start checkout. Please try again.");
-      setLoadingCheckout(null);
-    }
-  };
 
   const handlePortal = async () => {
     setLoadingPortal(true);
@@ -91,41 +68,18 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
         <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 20px", flex: 1 }}>
 
           {/* Current plan badge */}
-          <div style={{ background: isPremium ? "linear-gradient(135deg, #534AB7, #756AD9)" : "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 20, border: isPremium ? "none" : "1px solid var(--border)" }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: isPremium ? "rgba(255,255,255,0.7)" : "#6B6A7C", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Current plan</p>
-            <p style={{ fontSize: 22, fontWeight: 800, color: isPremium ? "#fff" : "#1A1A24", margin: "0 0 4px" }}>
-              {isPremium ? `Flourish Premium — ${planLabel}` : "Flourish Free"}
+          <div style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 16, padding: 20, marginBottom: 20 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: 1, margin: "0 0 6px" }}>Current plan</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: "#fff", margin: "0 0 4px" }}>
+              Flourish Premium — {planLabel}
             </p>
-            {isPremium ? (
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", margin: 0 }}>{planPrice} · Renews automatically</p>
-            ) : (
-              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>3 food ratings per day · Upgrade to unlock everything</p>
-            )}
+            <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", margin: 0 }}>{planPrice} · Renews automatically</p>
           </div>
 
-          {/* Feature comparison */}
+          {/* What you get */}
           <div style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>What's included</p>
-
-            {/* Free tier */}
-            <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: "14px 16px", marginBottom: 10, border: "1px solid var(--border)" }}>
-              <p style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", margin: "0 0 10px" }}>Free</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {FEATURES_FREE.map(f => (
-                  <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <Check size={14} color="#639922" />
-                    <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{f}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Premium tier */}
             <div style={{ background: "linear-gradient(135deg, rgba(83,74,183,0.06), rgba(117,106,217,0.06))", borderRadius: 14, padding: "14px 16px", border: "1px solid rgba(83,74,183,0.2)" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <p style={{ fontSize: 13, fontWeight: 800, color: "#534AB7", margin: 0 }}>Premium</p>
-                <Crown size={14} color="#534AB7" />
-              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                 {FEATURES_PREMIUM.map(f => (
                   <div key={f} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -143,61 +97,19 @@ export default function SubscriptionScreen({ onClose, onUpgrade }) {
             </div>
           )}
 
-          {/* Action buttons */}
-          {isPremium ? (
-            <motion.button
-              whileTap={{ scale: 0.97 }}
-              onClick={handlePortal}
-              disabled={loadingPortal}
-              style={{ width: "100%", background: "var(--bg-card)", border: "2px solid var(--border)", borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: 10 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
-                {loadingPortal ? "Opening portal..." : "Manage / Cancel subscription"}
-              </span>
-              {loadingPortal ? <Loader size={18} color="#6B6A7C" style={{ animation: "spin 1s linear infinite" }} /> : <ChevronRight size={18} color="#6B6A7C" />}
-            </motion.button>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 4 }}>
-              {/* Monthly */}
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => handleCheckout("monthly")}
-                disabled={!!loadingCheckout}
-                style={{ width: "100%", background: "#534AB7", color: "#fff", border: "none", borderRadius: 14, padding: "17px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", boxShadow: "0 4px 20px rgba(83,74,183,0.25)" }}>
-                <div style={{ textAlign: "left" }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>
-                    {loadingCheckout === "monthly" ? "Loading..." : "Start free trial — Monthly"}
-                  </p>
-                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", margin: "2px 0 0" }}>£12.99/month · 3 days free · Cancel anytime</p>
-                </div>
-                {loadingCheckout === "monthly"
-                  ? <Loader size={18} color="#fff" />
-                  : <ChevronRight size={18} color="rgba(255,255,255,0.7)" />}
-              </motion.button>
-
-              {/* Annual */}
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => handleCheckout("annual")}
-                disabled={!!loadingCheckout}
-                style={{ width: "100%", background: "var(--bg-elevated)", border: "2px solid #534AB7", borderRadius: 14, padding: "17px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", position: "relative" }}>
-                <div style={{ position: "absolute", top: -10, right: 16, background: "#534AB7", borderRadius: 20, padding: "2px 10px" }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#fff" }}>MOST POPULAR · SAVE 68%</span>
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <p style={{ fontSize: 16, fontWeight: 800, color: "#534AB7", margin: 0 }}>
-                    {loadingCheckout === "annual" ? "Loading..." : "Start free trial — Annual"}
-                  </p>
-                  <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "2px 0 0" }}>£49.99/year · £4.17/month · 3 days free · Cancel anytime</p>
-                </div>
-                {loadingCheckout === "annual"
-                  ? <Loader size={18} color="#534AB7" />
-                  : <ChevronRight size={18} color="#534AB7" />}
-              </motion.button>
-            </div>
-          )}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={handlePortal}
+            disabled={loadingPortal}
+            style={{ width: "100%", background: "var(--bg-card)", border: "2px solid var(--border)", borderRadius: 14, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", marginBottom: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>
+              {loadingPortal ? "Opening portal..." : "Manage / Cancel subscription"}
+            </span>
+            {loadingPortal ? <Loader size={18} color="#6B6A7C" style={{ animation: "spin 1s linear infinite" }} /> : <ChevronRight size={18} color="#6B6A7C" />}
+          </motion.button>
 
           <p style={{ fontSize: 11, color: "var(--text-muted)", textAlign: "center", marginTop: 12, lineHeight: 1.6, paddingBottom: 8 }}>
-            Subscriptions managed via Stripe. Cancel anytime — no charge during your 3-day free trial.
+            Subscriptions managed via Stripe. Cancel anytime from the customer portal.
           </p>
         </div>
       </motion.div>

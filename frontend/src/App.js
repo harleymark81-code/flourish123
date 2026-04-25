@@ -18,6 +18,7 @@ import InsightsScreen from "./components/InsightsScreen";
 import MyFoodsScreen from "./components/MyFoodsScreen";
 import ResetPassword from "./components/ResetPassword";
 import FreeScanScreen from "./components/FreeScanScreen";
+import ReturningUserWelcome from "./components/ReturningUserWelcome";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -108,6 +109,7 @@ function AppContent() {
   const { isDark, toggleTheme } = useTheme();
   const [showSplash, setShowSplash] = useState(!sessionStorage.getItem("splash_shown"));
   const [activeTab, setActiveTab] = useState("scan");
+  const [welcomeBackSeen, setWelcomeBackSeen] = useState(!!sessionStorage.getItem("welcome_back_seen"));
   const [pendingFoodName, setPendingFoodName] = useState(null);
   const [showUpgradedModal, setShowUpgradedModal] = useState(false);
   const [showCancelledMsg, setShowCancelledMsg] = useState(false);
@@ -191,6 +193,14 @@ function AppContent() {
   // Free scan step — user must experience Flourish before the paywall
   if (!user.has_used_free_scan && !isPremium) {
     return <FreeScanScreen onComplete={() => refreshUser()} />;
+  }
+  // Returning user — show welcome-back screen once per session before the paywall.
+  // sessionStorage so it re-shows on next visit until they subscribe.
+  if (!isPremium && !welcomeBackSeen) {
+    return <ReturningUserWelcome onContinue={() => {
+      sessionStorage.setItem("welcome_back_seen", "1");
+      setWelcomeBackSeen(true);
+    }} />;
   }
   // Hard paywall gate — no app access without active trial or subscription
   if (!isPremium) {

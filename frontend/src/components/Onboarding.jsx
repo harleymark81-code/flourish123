@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Check, Star, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Check, Star } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { ph } from "../lib/posthog";
@@ -201,9 +201,9 @@ export default function Onboarding({ onComplete }) {
   const scienceCards = SCIENCE_CARDS[primaryCondition] || SCIENCE_CARDS.default;
   const insights = INSIGHTS[primaryCondition] || INSIGHTS.other;
 
-  // Progress bar: screens 2–15 → 0% to 100%
-  const showProgress = screen >= 2 && screen <= 15;
-  const progress = showProgress ? ((screen - 2) / 13) * 100 : 0;
+  // Progress bar: screens 2–14 → 0% to 100% (13 steps, screen 1 and free-scan excluded)
+  const showProgress = screen >= 2 && screen <= 14;
+  const progress = showProgress ? ((screen - 2) / 12) * 100 : 0;
 
   const goTo = (s) => {
     setDir(s > screen ? 1 : -1);
@@ -363,7 +363,7 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 2 · Hook ─────────────────────────────────────────────────────── */}
+          {/* ── 2 · Personalisation hook ─────────────────────────────────────── */}
           {screen === 2 && (
             <motion.div key="s2" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
@@ -385,7 +385,7 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 3 · Conditions ───────────────────────────────────────────────── */}
+          {/* ── 3 · Conditions (multi-select) ────────────────────────────────── */}
           {screen === 3 && (
             <motion.div key="s3" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
@@ -421,7 +421,7 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 5 · Struggles ────────────────────────────────────────────────── */}
+          {/* ── 5 · Struggles (multi-select) ─────────────────────────────────── */}
           {screen === 5 && (
             <motion.div key="s5" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
@@ -447,7 +447,7 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 7 · Diet ─────────────────────────────────────────────────────── */}
+          {/* ── 7 · Diet style (multi-select) ────────────────────────────────── */}
           {screen === 7 && (
             <motion.div key="s7" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
@@ -460,65 +460,22 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 8 · Emotional validation (personalised to condition) ──────────── */}
+          {/* ── 8 · Meals per day ────────────────────────────────────────────── */}
           {screen === 8 && (
             <motion.div key="s8" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
-              <BackBtn />
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 16 }}>
-                <motion.div initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 280, damping: 18 }}
-                  style={{ fontSize: 64, marginBottom: 24 }}>
-                  {validation.emoji}
-                </motion.div>
-                <h2 style={{ fontSize: 24, fontWeight: 800, color: P, marginBottom: 18, letterSpacing: "-0.02em", lineHeight: 1.25 }}>{validation.headline}</h2>
-                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 } }}
-                  style={{ background: "var(--bg-card)", borderRadius: 16, padding: "20px", marginBottom: 36, border: "1px solid var(--border)", textAlign: "left" }}>
-                  {validation.body.split("\n\n").map((para, i) => (
-                    <p key={i} style={{ fontSize: 16, color: S, lineHeight: 1.7, margin: i > 0 ? "14px 0 0" : 0 }}>{para}</p>
-                  ))}
-                </motion.div>
-                <Btn onClick={() => goTo(9)}>I feel seen →</Btn>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── 9 · Science cards (personalised to condition) ────────────────── */}
-          {screen === 9 && (
-            <motion.div key="s9" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
-              <BackBtn />
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 8, letterSpacing: "-0.02em" }}>Built on science you can trust.</h2>
-                <p style={{ fontSize: 15, color: S, lineHeight: 1.6 }}>Every rating is grounded in peer-reviewed research and clinical nutrition principles — tried, tested, and proven.</p>
-              </div>
-              {scienceCards.map((c, i) => (
-                <motion.div key={i} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.1 } }}
-                  style={{ background: "var(--bg-card)", borderRadius: 16, padding: "16px 18px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", gap: 14, alignItems: "flex-start" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(83,74,183,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 22 }}>{c.emoji}</div>
-                  <div>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "0 0 4px" }}>{c.title}</p>
-                    <p style={{ fontSize: 13, color: S, margin: 0, lineHeight: 1.5 }}>{c.desc}</p>
-                  </div>
-                </motion.div>
-              ))}
-              <Btn onClick={() => goTo(10)} style={{ marginTop: 12 }}>Continue →</Btn>
-            </motion.div>
-          )}
-
-          {/* ── 10 · Meals per day ───────────────────────────────────────────── */}
-          {screen === 10 && (
-            <motion.div key="s10" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
               <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 6, letterSpacing: "-0.02em" }}>How many meals do you eat per day?</h2>
               <p style={{ fontSize: 15, color: S, marginBottom: 22 }}>Choose one</p>
               <div style={{ marginBottom: 24 }}>
                 {MEALS.map((m) => <Option key={m.id} label={m.label} selected={mealsPerDay === m.id} onSelect={() => setMealsPerDay(m.id)} />)}
               </div>
-              <Btn onClick={() => goTo(11)} disabled={!mealsPerDay}>Continue →</Btn>
+              <Btn onClick={() => goTo(9)} disabled={!mealsPerDay}>Continue →</Btn>
             </motion.div>
           )}
 
-          {/* ── 11 · Appearance ──────────────────────────────────────────────── */}
-          {screen === 11 && (
-            <motion.div key="s11" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
+          {/* ── 9 · Appearance ───────────────────────────────────────────────── */}
+          {screen === 9 && (
+            <motion.div key="s9" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
               <BackBtn />
               <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 8, letterSpacing: "-0.02em" }}>How would you like Flourish to look?</h2>
               <p style={{ fontSize: 15, color: S, marginBottom: 24 }}>Tap to preview — changes apply instantly.</p>
@@ -550,6 +507,49 @@ export default function Onboarding({ onComplete }) {
                   );
                 })}
               </div>
+              <Btn onClick={() => goTo(10)}>Continue →</Btn>
+            </motion.div>
+          )}
+
+          {/* ── 10 · Emotional validation (personalised to condition) ────────── */}
+          {screen === 10 && (
+            <motion.div key="s10" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
+              <BackBtn />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", paddingTop: 16 }}>
+                <motion.div initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 280, damping: 18 }}
+                  style={{ fontSize: 64, marginBottom: 24 }}>
+                  {validation.emoji}
+                </motion.div>
+                <h2 style={{ fontSize: 24, fontWeight: 800, color: P, marginBottom: 18, letterSpacing: "-0.02em", lineHeight: 1.25 }}>{validation.headline}</h2>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.25 } }}
+                  style={{ background: "var(--bg-card)", borderRadius: 16, padding: "20px", marginBottom: 36, border: "1px solid var(--border)", textAlign: "left" }}>
+                  {validation.body.split("\n\n").map((para, i) => (
+                    <p key={i} style={{ fontSize: 16, color: S, lineHeight: 1.7, margin: i > 0 ? "14px 0 0" : 0 }}>{para}</p>
+                  ))}
+                </motion.div>
+                <Btn onClick={() => goTo(11)}>I feel seen →</Btn>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── 11 · Built on science (personalised to condition) ────────────── */}
+          {screen === 11 && (
+            <motion.div key="s11" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
+              <BackBtn />
+              <div style={{ textAlign: "center", marginBottom: 28 }}>
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 8, letterSpacing: "-0.02em" }}>Built on science you can trust.</h2>
+                <p style={{ fontSize: 15, color: S, lineHeight: 1.6 }}>Every rating is grounded in peer-reviewed research and clinical nutrition principles — tried, tested, and proven.</p>
+              </div>
+              {scienceCards.map((c, i) => (
+                <motion.div key={i} initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0, transition: { delay: i * 0.1 } }}
+                  style={{ background: "var(--bg-card)", borderRadius: 16, padding: "16px 18px", marginBottom: 12, border: "1px solid var(--border)", display: "flex", gap: 14, alignItems: "flex-start" }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(83,74,183,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 22 }}>{c.emoji}</div>
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "0 0 4px" }}>{c.title}</p>
+                    <p style={{ fontSize: 13, color: S, margin: 0, lineHeight: 1.5 }}>{c.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
               <Btn onClick={() => goTo(12)}>Continue →</Btn>
             </motion.div>
           )}
@@ -581,7 +581,7 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 13 · Loading ─────────────────────────────────────────────────── */}
+          {/* ── 13 · Building your plan (loading) ─────────────────────────────── */}
           {screen === 13 && (
             <motion.div key="s13" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit"
               style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "82vh", textAlign: "center" }}>
@@ -605,54 +605,64 @@ export default function Onboarding({ onComplete }) {
             </motion.div>
           )}
 
-          {/* ── 14 · Tailored insights reveal ────────────────────────────────── */}
+          {/* ── 14 · Plan reveal (name + conditions + goal + 3 tailored insights) */}
           {screen === 14 && (
             <motion.div key="s14" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
-              <div style={{ textAlign: "center", marginBottom: 24, paddingTop: 8 }}>
-                <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: "spring", stiffness: 280, damping: 18 }}
-                  style={{ fontSize: 52, marginBottom: 16 }}>
-                  🔬
-                </motion.div>
-                <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 8, letterSpacing: "-0.02em" }}>Here's what we found for you.</h2>
-                <p style={{ fontSize: 15, color: S, lineHeight: 1.6 }}>
-                  Based on your conditions and goals, here are 3 things Flourish will track for you every day.
-                </p>
-              </div>
-              {insights.map((insight, i) => (
-                <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: i * 0.18 } }}
-                  style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12, padding: "15px 17px", background: "var(--bg-card)", borderRadius: 14, border: "1px solid var(--border)" }}>
-                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: `linear-gradient(135deg, ${PRI}, #756AD9)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-                    <Star size={11} color="#fff" fill="#fff" />
-                  </div>
-                  <p style={{ fontSize: 14, color: P, margin: 0, lineHeight: 1.55 }}>{insight}</p>
-                </motion.div>
-              ))}
-              <div style={{ marginTop: 16 }}>
-                <Btn onClick={() => goTo(15)}>See your personalised plan →</Btn>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── 15 · Plan reveal + CTA ───────────────────────────────────────── */}
-          {screen === 15 && (
-            <motion.div key="s15" custom={dir} variants={variants} initial="initial" animate="animate" exit="exit">
-              <div style={{ textAlign: "center", marginBottom: 22 }}>
+              <div style={{ textAlign: "center", marginBottom: 22, paddingTop: 8 }}>
                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 300, damping: 17 }}
                   style={{ width: 58, height: 58, borderRadius: "50%", background: "linear-gradient(135deg, #639922, #7ab82a)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 14px", boxShadow: "0 4px 20px rgba(99,153,34,0.3)" }}>
                   <Check size={26} color="#fff" />
                 </motion.div>
-                <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 5, letterSpacing: "-0.02em" }}>Your plan is ready.</h2>
-                <p style={{ fontSize: 14, color: S }}>Personalised for {conditions.map(c => CONDITIONS.find(x => x.id === c)?.label || c).join(", ")}</p>
+                <h2 style={{ fontSize: 26, fontWeight: 800, color: P, marginBottom: 6, letterSpacing: "-0.02em" }}>
+                  {user?.name ? `${user.name}, your plan is ready.` : "Your plan is ready."}
+                </h2>
+                <p style={{ fontSize: 14, color: S, lineHeight: 1.55, margin: 0 }}>
+                  Here's what we built for you, based on what you told us.
+                </p>
               </div>
-              <div style={{ background: "rgba(83,74,183,0.06)", borderRadius: 16, padding: "16px 18px", marginBottom: 20, border: "1px solid rgba(83,74,183,0.18)" }}>
+
+              {/* Personalised summary card */}
+              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.1 } }}
+                style={{ background: "rgba(83,74,183,0.06)", borderRadius: 16, padding: "16px 18px", marginBottom: 18, border: "1px solid rgba(83,74,183,0.18)" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
-                  {user?.name && <div><p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Name</p><p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{user.name}</p></div>}
-                  <div><p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Conditions</p><p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{conditions.map(c => CONDITIONS.find(x => x.id === c)?.label || c).join(", ")}</p></div>
-                  {goal && <div><p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Goal</p><p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{GOALS.find(g => g.id === goal)?.label || goal}</p></div>}
-                  {mealsPerDay && <div><p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Meals/day</p><p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{MEALS.find(m => m.id === mealsPerDay)?.label || mealsPerDay}</p></div>}
+                  {user?.name && (
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Name</p>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{user.name}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Conditions</p>
+                    <p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>
+                      {conditions.map(c => CONDITIONS.find(x => x.id === c)?.label || c).join(", ")}
+                    </p>
+                  </div>
+                  {goal && (
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: PRI, textTransform: "uppercase", letterSpacing: 0.8, margin: 0 }}>Goal</p>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: P, margin: "2px 0 0" }}>{GOALS.find(g => g.id === goal)?.label || goal}</p>
+                    </div>
+                  )}
                 </div>
+              </motion.div>
+
+              {/* 3 tailored insights for the user's exact condition */}
+              <div style={{ marginBottom: 8 }}>
+                <p style={{ fontSize: 12, fontWeight: 800, color: S, textTransform: "uppercase", letterSpacing: 1, margin: "0 0 12px" }}>3 things Flourish will track for you</p>
+                {insights.map((insight, i) => (
+                  <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: 0.18 + i * 0.15 } }}
+                    style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 10, padding: "14px 16px", background: "var(--bg-card)", borderRadius: 14, border: "1px solid var(--border)" }}>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: `linear-gradient(135deg, ${PRI}, #756AD9)`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      <Star size={11} color="#fff" fill="#fff" />
+                    </div>
+                    <p style={{ fontSize: 14, color: P, margin: 0, lineHeight: 1.55 }}>{insight}</p>
+                  </motion.div>
+                ))}
               </div>
-              <Btn onClick={onComplete} style={{ marginTop: 10 }}>Let's rate your first food →</Btn>
+
+              <div style={{ marginTop: 20 }}>
+                <Btn onClick={onComplete}>Let's rate your first food →</Btn>
+              </div>
             </motion.div>
           )}
 

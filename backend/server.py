@@ -327,6 +327,7 @@ async def get_current_user(request: Request):
             raise HTTPException(status_code=401, detail="Session expired, please log in again")
         user["_id"] = str(user["_id"])
         user.pop("password_hash", None)
+        await _maybe_mark_abandoned(user)
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -485,8 +486,6 @@ async def register(request: Request, data: RegisterRequest):
         "streak": 0,
         "longest_streak": 0,
         "last_active_date": None,
-        "preview_24h_used": False,
-        "preview_24h_expires": None,
         "token_version": 0,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -637,7 +636,6 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
     monthly_avg = round(sum(e.get("overall_score", 0) for e in monthly_entries) / len(monthly_entries)) if monthly_entries else 0
 
     streak = current_user.get("streak", 0)
-    preview_active = _check_preview_active(current_user)
     effective_premium = _effective_premium(current_user)
     has_used_free_scan = current_user.get("has_used_free_scan", False)
 
@@ -646,27 +644,39 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
         "streak": streak,
         "longest_streak": current_user.get("longest_streak", 0),
         "is_premium": effective_premium,
-        "preview_active": preview_active,
         "has_used_free_scan": has_used_free_scan,
         "free_scan_available": not has_used_free_scan and not effective_premium,
     }
 
-def _check_preview_active(user: dict) -> bool:
-    """Return True if the user's 24h premium preview is currently active."""
-    if user.get("is_premium"):
-        return False  # Already full premium — no need to check preview
-    exp = user.get("preview_24h_expires")
-    if not exp:
-        return False
-    try:
-        preview_exp = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
-        return datetime.now(timezone.utc) < preview_exp
-    except Exception:
-        return False
-
 def _effective_premium(user: dict) -> bool:
-    """Return True if user is premium (paid, active preview, or admin)."""
-    return user.get("is_admin", False) or user.get("is_premium", False) or _check_preview_active(user)
+    """Return True if user has full app access (paid subscriber or admin)."""
+    return user.get("is_admin", False) or user.get("is_premium", False)
+
+async def _maybe_mark_abandoned(user: dict) -> None:
+    """Set abandoned=true on users who used the free scan but haven't subscribed
+    within 24 hours. Idempotent — safe to call on every request. Used by future
+    Resend re-engagement emails to identify the cohort."""
+    if not user.get("has_used_free_scan"):
+        return
+    if user.get("is_premium") or user.get("is_admin"):
+        return
+    if user.get("abandoned"):
+        return  # Already flagged
+    used_at = user.get("free_scan_used_at")
+    if not used_at:
+        return  # Older user — no timestamp to compare against
+    try:
+        used_dt = datetime.fromisoformat(str(used_at).replace("Z", "+00:00"))
+    except Exception:
+        return
+    if datetime.now(timezone.utc) - used_dt < timedelta(hours=24):
+        return
+    uid = user.get("id") or user.get("_id")
+    await db.users.update_one(
+        {"_id": ObjectId(uid)},
+        {"$set": {"abandoned": True, "abandoned_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    user["abandoned"] = True
 
 # ── FOOD RATING ────────────────────────────────────────────────────────────────
 @api_router.post("/food/rate")
@@ -734,7 +744,13 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     medications = current_user.get("medications", "")
     current_symptoms = current_user.get("current_symptoms", [])
 
-    system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness. You provide evidence-based food ratings personalised to the user's specific health conditions. You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
+    system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness.
+
+You provide evidence-based food ratings that are DEEPLY PERSONALISED to the user's specific health profile. The user's full onboarding profile is provided below — conditions, severity, current symptoms, medications, primary goal, struggles, dietary style, and meals per day. You MUST use every relevant field when scoring.
+
+Critical rule: two users with DIFFERENT conditions must NEVER receive the same overallScore for the same food. The overallScore, every dimension score, the verdict text, the forYourCondition explanation, the warnings, the positives, and the alternatives must all reflect that user's specific conditions and goals. A food that is excellent for someone with PCOS may be neutral or harmful for someone with thyroid disease — and your scoring must reflect that.
+
+You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
 
     struggles = current_user.get("struggles", [])
     diet_style = current_user.get("diet_style", [])
@@ -842,11 +858,16 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
             except Exception as ce:
                 logger.warning(f"Barcode cache write error: {ce}")
 
-        # Mark free scan as used after a successful rating
+        # Mark free scan as used after a successful rating; record timestamp so
+        # the abandoned-cart job (Resend re-engagement) can find them at 24h.
         if is_free_scan:
             await db.users.update_one(
                 {"_id": ObjectId(uid)},
-                {"$set": {"has_used_free_scan": True}}
+                {"$set": {
+                    "has_used_free_scan": True,
+                    "free_scan_used_at": datetime.now(timezone.utc).isoformat(),
+                    "abandoned": False,
+                }}
             )
 
         return rating_data
@@ -1095,19 +1116,9 @@ async def get_streak_reward(current_user: dict = Depends(get_current_user)):
     elif streak == 7:
         reward = {"type": "weekly_insight", "message": "7 day streak! You have unlocked your weekly health insight."}
     elif streak == 14:
-        preview_used = current_user.get("preview_24h_used", False)
-        if not preview_used:
-            preview_expires = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-            # Only set preview fields — do NOT set is_premium permanently
-            await db.users.update_one(
-                {"_id": ObjectId(uid)},
-                {"$set": {"preview_24h_used": True, "preview_24h_expires": preview_expires}}
-            )
-            reward = {"type": "premium_preview", "message": "2 week streak! You have earned a free 24-hour premium preview!"}
-        else:
-            reward = {"type": "milestone", "message": "14 day streak! Great work staying consistent."}
+        reward = {"type": "milestone", "message": "14 day streak! Great work staying consistent."}
     elif streak == 30:
-        reward = {"type": "free_week", "message": "30 day streak! You have earned one week of Flourish Premium free."}
+        reward = {"type": "milestone", "message": "30 day streak! You have completely changed your relationship with food."}
 
     return {"streak": streak, "reward": reward}
 
