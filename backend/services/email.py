@@ -17,7 +17,8 @@ import resend
 
 logger = logging.getLogger(__name__)
 
-FROM_ADDRESS = "Flourish <onboarding@resend.dev>"
+FROM_ADDRESS = "Flourish <hello@mail.theflourishapp.health>"
+REPLY_TO = "hello@theflourishapp.health"
 FRONTEND_URL = "https://theflourishapp.netlify.app"
 
 # -- Brand colours -------------------------------------------------------------
@@ -41,6 +42,7 @@ def _send_sync(to: str, subject: str, html: str) -> bool:
     response = resend.Emails.send({
         "from": FROM_ADDRESS,
         "to": [to],
+        "reply_to": REPLY_TO,
         "subject": subject,
         "html": html,
     })
@@ -375,3 +377,22 @@ async def send_weekly_report_email(
         + _btn("Open Flourish", FRONTEND_URL)
     )
     return await send_email(to, "Your Flourish weekly food report", _wrap(body))
+
+
+# -- 8. Cancellation -----------------------------------------------------------
+
+async def send_cancellation_email(to: str, name: str) -> bool:
+    first = name.split()[0] if name else "there"
+    body = (
+        _h1("Your Flourish Premium subscription has been cancelled")
+        + _p("Hi " + first + ", we're sorry to see you go. Your subscription has been cancelled and your account has returned to the free plan.")
+        + _highlight_box(
+            '<p style="margin:0 0 8px;font-size:13px;font-weight:700;color:' + TEXT_MUTED + ';text-transform:uppercase;letter-spacing:0.8px;">Good news</p>'
+            + '<p style="margin:0;font-size:15px;color:' + TEXT + ';line-height:1.6;">'
+            "All your scan history, saved foods, and diary entries are still here whenever you come back."
+            "</p>"
+        )
+        + _p("If you cancelled by mistake or want to restart your journey, you can resubscribe at any time -- your data will be exactly where you left it.", muted=True)
+        + _btn("Resubscribe", "https://theflourishapp.health")
+    )
+    return await send_email(to, "Your Flourish Premium subscription has been cancelled", _wrap(body))

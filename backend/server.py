@@ -76,10 +76,11 @@ from services.email import (
     send_welcome_email,
     send_subscription_confirmed_email,
     send_trial_ending_email,
-
+    send_scan_limit_email,
     send_referral_reward_email,
     send_password_reset_email,
     send_weekly_report_email,
+    send_cancellation_email,
 )
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
@@ -688,6 +689,10 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     is_free_scan = False
     if not _effective_premium(current_user):
         if current_user.get("has_used_free_scan", False):
+            asyncio.create_task(send_scan_limit_email(
+                to=current_user.get("email", ""),
+                name=current_user.get("name", ""),
+            ))
             raise HTTPException(
                 status_code=403,
                 detail="An active subscription is required. Please start your free trial to continue."
@@ -1532,6 +1537,12 @@ async def stripe_webhook(request: Request):
                         {"$set": {"is_premium": False, "is_trialing": False, "premium_expires_at": datetime.now(timezone.utc).isoformat()}}
                     )
                     logger.info(f"User {uid} downgraded — subscription deleted")
+                    cancelled_user = await db.users.find_one({"_id": ObjectId(uid)}, {"email": 1, "name": 1})
+                    if cancelled_user:
+                        asyncio.create_task(send_cancellation_email(
+                            to=cancelled_user.get("email", ""),
+                            name=cancelled_user.get("name", ""),
+                        ))
 
         elif event_type == "invoice.payment_succeeded":
             customer_id = data_obj.get("customer")
