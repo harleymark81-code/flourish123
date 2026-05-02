@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, CalendarDays, ChevronDown } from "lucide-react";
+import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, CalendarDays, ChevronDown, MessageCircle, Mail, HelpCircle, ArrowLeft, ChevronUp, Send } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
@@ -204,6 +204,175 @@ function CycleTrackingCard({ getHeaders, API, cycleEnabled }) {
   );
 }
 
+const FAQS = [
+  {
+    q: "How is my Flourish score calculated?",
+    a: "Every food is rated across four dimensions — Naturalness, Hormonal Impact, Inflammation, and Gut Health — using peer-reviewed nutritional research. Your score is then adjusted based on your specific conditions, goals, and dietary style. No two profiles produce the same ratings.",
+  },
+  {
+    q: "Can I cancel my subscription anytime?",
+    a: "Yes, always. You can cancel in one tap from your Profile → Manage Subscription. You'll keep access until the end of your billing period.",
+  },
+  {
+    q: "Is my health data safe?",
+    a: "Your data is encrypted, never sold, and never shared with third parties. Your health information belongs to you.",
+  },
+  {
+    q: "Why does the same food score differently for different people?",
+    a: "Because different conditions respond differently to the same ingredients. Someone with PCOS and someone with IBS will see different scores for the same food — because Flourish is built around your body, not a generic nutrition database.",
+  },
+  {
+    q: "How do I update my health profile?",
+    a: "Go to Profile → Edit Profile. You can update your conditions, goals, diet, and any other details at any time.",
+  },
+];
+
+function SupportScreen({ user, getHeaders, API, onBack }) {
+  const [view, setView] = useState("main"); // "main" | "form"
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sendError, setSendError] = useState("");
+  const [openFAQ, setOpenFAQ] = useState(null);
+
+  const handleSend = async () => {
+    if (!subject.trim() || !message.trim()) return;
+    setSending(true);
+    setSendError("");
+    try {
+      await axios.post(`${API}/support/contact`, { subject: subject.trim(), message: message.trim() }, { headers: getHeaders(), withCredentials: true });
+      setSent(true);
+    } catch (e) {
+      setSendError("Couldn't send your message. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const PRI = "#534AB7";
+  const P = "var(--text-primary)";
+  const S = "var(--text-secondary)";
+
+  return (
+    <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", paddingTop: 56 }}>
+      <div style={{ padding: "0 20px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+          <motion.button whileTap={{ scale: 0.9 }} onClick={onBack}
+            style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 10, width: 38, height: 38, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+            <ArrowLeft size={16} color={S} />
+          </motion.button>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: P, margin: 0 }}>Help &amp; Support</h1>
+        </div>
+
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: P, margin: "0 0 8px", letterSpacing: "-0.02em" }}>We're here to help.</h2>
+          <p style={{ fontSize: 15, color: S, margin: 0, lineHeight: 1.6 }}>Flourish is built by a small team that genuinely cares. Whatever you need — we'll get back to you within 24 hours.</p>
+        </div>
+
+        {/* Card 1 — Send a message */}
+        <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, marginBottom: 12, border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: view === "form" ? 16 : 0 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(83,74,183,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <MessageCircle size={20} color={PRI} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: P, margin: 0 }}>Send us a message</p>
+              <p style={{ fontSize: 13, color: S, margin: "2px 0 0" }}>We'll reply within 24 hours</p>
+            </div>
+            {view !== "form" && (
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => { setView("form"); setSent(false); setSendError(""); }}
+                style={{ background: PRI, border: "none", borderRadius: 10, padding: "8px 16px", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                Write
+              </motion.button>
+            )}
+          </div>
+          <AnimatePresence>
+            {view === "form" && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} style={{ overflow: "hidden" }}>
+                {sent ? (
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    style={{ background: "rgba(99,153,34,0.08)", border: "1px solid rgba(99,153,34,0.2)", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "#639922", margin: "0 0 4px" }}>Message sent ✓</p>
+                    <p style={{ fontSize: 13, color: S, margin: 0 }}>We'll reply to {user?.email} within 24 hours.</p>
+                  </motion.div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: S, margin: "0 0 6px" }}>Subject</p>
+                      <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="What do you need help with?"
+                        style={{ width: "100%", background: "var(--input-bg, var(--bg-elevated))", border: "2px solid var(--border)", borderRadius: 10, padding: "11px 14px", fontSize: 14, color: P, outline: "none", boxSizing: "border-box" }} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: 12, fontWeight: 600, color: S, margin: "0 0 6px" }}>Message</p>
+                      <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Tell us what's going on..." rows={4}
+                        style={{ width: "100%", background: "var(--input-bg, var(--bg-elevated))", border: "2px solid var(--border)", borderRadius: 10, padding: "11px 14px", fontSize: 14, color: P, outline: "none", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", lineHeight: 1.55 }} />
+                    </div>
+                    {sendError && <p style={{ fontSize: 13, color: "#A32D2D", margin: 0 }}>{sendError}</p>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => setView("main")}
+                        style={{ flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, padding: 11, fontSize: 14, cursor: "pointer", color: S }}>
+                        Cancel
+                      </button>
+                      <motion.button whileTap={{ scale: 0.97 }} onClick={handleSend}
+                        disabled={sending || !subject.trim() || !message.trim()}
+                        style={{ flex: 2, background: !subject.trim() || !message.trim() ? "var(--border)" : PRI, color: "#fff", border: "none", borderRadius: 10, padding: 11, fontSize: 14, fontWeight: 600, cursor: sending || !subject.trim() || !message.trim() ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                        {sending ? "Sending..." : <><Send size={14} /> Send</>}
+                      </motion.button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Card 2 — Email directly */}
+        <a href="mailto:hello@theflourishapp.health" style={{ textDecoration: "none", display: "block", marginBottom: 12 }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(83,74,183,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Mail size={20} color={PRI} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 15, fontWeight: 700, color: P, margin: 0 }}>Email us directly</p>
+              <p style={{ fontSize: 13, color: PRI, margin: "2px 0 0", fontWeight: 500 }}>hello@theflourishapp.health</p>
+            </div>
+            <ChevronRight size={16} color={PRI} />
+          </div>
+        </a>
+
+        {/* Card 3 — FAQs */}
+        <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 20, border: "1px solid var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(83,74,183,0.09)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <HelpCircle size={20} color={PRI} />
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 700, color: P, margin: 0 }}>Frequently asked questions</p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {FAQS.map((faq, i) => (
+              <div key={i} style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none", paddingTop: i > 0 ? 10 : 0 }}>
+                <button onClick={() => setOpenFAQ(openFAQ === i ? null : i)}
+                  style={{ width: "100%", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, padding: "6px 0", textAlign: "left" }}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: P, margin: 0, lineHeight: 1.4, flex: 1 }}>{faq.q}</p>
+                  {openFAQ === i ? <ChevronUp size={15} color={S} style={{ flexShrink: 0, marginTop: 2 }} /> : <ChevronDown size={15} color={S} style={{ flexShrink: 0, marginTop: 2 }} />}
+                </button>
+                <AnimatePresence>
+                  {openFAQ === i && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} style={{ overflow: "hidden" }}>
+                      <p style={{ fontSize: 13, color: S, margin: "4px 0 10px", lineHeight: 1.6 }}>{faq.a}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfileScreen({ onEditProfile }) {
   const { user, isPremium, logout, getHeaders, API } = useAuth();
   const [stats, setStats] = useState(null);
@@ -214,6 +383,7 @@ export default function ProfileScreen({ onEditProfile }) {
   const [deleteError, setDeleteError] = useState("");
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState("");
+  const [showSupport, setShowSupport] = useState(false);
 
   useEffect(() => {
     loadStats();
@@ -296,6 +466,10 @@ export default function ProfileScreen({ onEditProfile }) {
     const special = { pcos: "PCOS", ibs: "IBS", type2_diabetes: "Type 2 Diabetes" };
     return special[c] || c.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
   });
+
+  if (showSupport) {
+    return <SupportScreen user={user} getHeaders={getHeaders} API={API} onBack={() => setShowSupport(false)} />;
+  }
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))", paddingTop: 56 }}>
@@ -439,6 +613,19 @@ export default function ProfileScreen({ onEditProfile }) {
           <div>
             <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Become an affiliate</p>
             <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Earn 30% commission on referrals</p>
+          </div>
+          <ChevronRight size={16} color="#534AB7" />
+        </motion.div>
+
+        {/* Help & Support */}
+        <motion.div whileTap={{ scale: 0.97 }} onClick={() => setShowSupport(true)}
+          style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <MessageCircle size={18} color="#534AB7" />
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Help &amp; Support</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>FAQs, contact us, and more</p>
+            </div>
           </div>
           <ChevronRight size={16} color="#534AB7" />
         </motion.div>

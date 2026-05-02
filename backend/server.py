@@ -81,6 +81,7 @@ from services.email import (
     send_password_reset_email,
     send_weekly_report_email,
     send_cancellation_email,
+    send_support_email,
 )
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
@@ -377,6 +378,7 @@ class ProfileUpdateRequest(BaseModel):
     goal: Optional[str] = Field(default=None, max_length=100)
     meals_per_day: Optional[str] = Field(default=None, max_length=50)
     appearance_preference: Optional[str] = Field(default=None, max_length=10)  # "light" | "dark"
+    age: Optional[int] = None
 
 class FoodRatingRequest(BaseModel):
     food_name: str = Field(min_length=1, max_length=200)
@@ -626,7 +628,27 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
         update["meals_per_day"] = data.meals_per_day
     if data.appearance_preference is not None:
         update["appearance_preference"] = data.appearance_preference
+    if data.age is not None:
+        update["age"] = data.age
     await db.users.update_one({"_id": ObjectId(current_user["id"] if "id" in current_user else current_user["_id"])}, {"$set": update})
+    return {"success": True}
+
+# ── SUPPORT ────────────────────────────────────────────────────────────────────
+class SupportContactRequest(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    message: str = Field(min_length=1, max_length=2000)
+
+@api_router.post("/support/contact")
+async def support_contact(data: SupportContactRequest, current_user: dict = Depends(get_current_user)):
+    asyncio.create_task(
+        send_support_email(
+            to="hello@theflourishapp.health",
+            user_email=current_user.get("email", ""),
+            user_name=current_user.get("name", ""),
+            subject=data.subject,
+            message=data.message,
+        )
+    )
     return {"success": True}
 
 @api_router.get("/profile/stats")

@@ -379,7 +379,21 @@ async def send_weekly_report_email(
     return await send_email(to, "Your Flourish weekly food report", _wrap(body))
 
 
-# -- 8. Cancellation -----------------------------------------------------------
+# -- 8. Support contact --------------------------------------------------------
+
+async def send_support_email(to: str, user_email: str, user_name: str, subject: str, message: str) -> bool:
+    body = (
+        _h1("Flourish Support: " + subject)
+        + _p("<strong>From:</strong> " + (user_name or "Unknown") + " &lt;" + user_email + "&gt;")
+        + _divider()
+        + '<div style="background:' + BG + ';border-left:4px solid ' + PURPLE + ';border-radius:0 8px 8px 0;padding:16px 20px;margin:16px 0;font-size:15px;color:' + TEXT + ';line-height:1.7;white-space:pre-wrap;">'
+        + message
+        + "</div>"
+    )
+    return await send_email(to, "Flourish Support: " + subject, _wrap(body))
+
+
+# -- 9. Cancellation -----------------------------------------------------------
 
 async def send_cancellation_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"
