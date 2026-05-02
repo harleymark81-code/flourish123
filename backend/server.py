@@ -229,6 +229,8 @@ _allow_origins = [
     "https://theflourishapp.netlify.app",
     "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app",
     "https://flourish123-production.up.railway.app",
+    "https://theflourishapp.health",
+    "https://www.theflourishapp.health",
 ]
 # Add localhost only in non-production (set CORS_ORIGINS env var locally)
 _extra = os.environ.get("CORS_ORIGINS", "")
