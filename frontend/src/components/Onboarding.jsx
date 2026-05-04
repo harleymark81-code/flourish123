@@ -641,20 +641,27 @@ export default function Onboarding({ onComplete }) {
               <Btn loading={saving} onClick={async () => {
                 setSaving(true);
                 try {
-                  await updateProfile({
-                    age: age ? parseInt(age, 10) : undefined,
-                    conditions,
-                    goals: [goal].filter(Boolean),
-                    managing_duration: howLong,
-                    onboarding_completed: true,
-                    struggles,
-                    diet_style: dietStyle,
-                    goal,
-                    meals_per_day: mealsPerDay,
-                    appearance_preference: appearance,
-                  });
+                  await Promise.race([
+                    updateProfile({
+                      age: age ? parseInt(age, 10) : undefined,
+                      conditions,
+                      goals: [goal].filter(Boolean),
+                      managing_duration: howLong,
+                      onboarding_completed: true,
+                      struggles,
+                      diet_style: dietStyle,
+                      goal,
+                      meals_per_day: mealsPerDay,
+                      appearance_preference: appearance,
+                    }),
+                    new Promise((_, rej) =>
+                      setTimeout(() => rej(new Error("[Onboarding] save timed out")), 10000)
+                    ),
+                  ]);
                 } catch (e) {
                   console.error("[Onboarding] completion save failed:", e);
+                } finally {
+                  setSaving(false);
                 }
                 onComplete();
               }}>Scan my first food free →</Btn>
