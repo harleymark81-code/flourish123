@@ -402,10 +402,18 @@ export default function ProfileScreen({ onEditProfile }) {
 
   const loadReferralStats = async () => {
     try {
-      const res = await axios.get(`${API}/referral/stats`, { headers: getHeaders(), withCredentials: true });
+      const res = await axios.get(`${API}/referrals/stats`, { headers: getHeaders(), withCredentials: true });
       setReferralStats(res.data);
     } catch (e) {
       console.error("[Flourish] ProfileScreen loadReferralStats error:", e);
+      if (user?.referral_code) {
+        setReferralStats({
+          referral_code: user.referral_code,
+          referral_link: `https://theflourishapp.health?ref=${user.referral_code}`,
+          referral_count: 0,
+          referral_rewarded: false,
+        });
+      }
     }
   };
 
@@ -549,8 +557,8 @@ export default function ProfileScreen({ onEditProfile }) {
         {/* Referral */}
         {referralStats && (
           <div style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid var(--border)" }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 12px" }}>Refer friends & earn</p>
-            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px" }}>Earn one free month of Premium for every paying referral.</p>
+            <p style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: "0 0 12px" }}>Refer a friend, both of you win.</p>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 12px" }}>Your friend gets a 14-day free trial. When they subscribe, you get a free month added to your account.</p>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1, background: "var(--bg-elevated)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border)" }}>
                 <p style={{ fontSize: 12, color: "var(--text-secondary)", margin: "0 0 2px" }}>Referral link</p>
@@ -563,11 +571,11 @@ export default function ProfileScreen({ onEditProfile }) {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
               <div style={{ background: "var(--bg-elevated)", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid var(--border)" }}>
-                <p style={{ fontSize: 20, fontWeight: 700, color: "#534AB7", margin: 0 }}>{referralStats.paying_referrals}</p>
-                <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Paying referrals</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: "#534AB7", margin: 0 }}>{referralStats.referral_count}</p>
+                <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Subscribers referred</p>
               </div>
               <div style={{ background: "var(--bg-elevated)", borderRadius: 10, padding: 12, textAlign: "center", border: "1px solid var(--border)" }}>
-                <p style={{ fontSize: 20, fontWeight: 700, color: "#639922", margin: 0 }}>{referralStats.free_months_earned}</p>
+                <p style={{ fontSize: 20, fontWeight: 700, color: "#639922", margin: 0 }}>{referralStats.referral_count}</p>
                 <p style={{ fontSize: 11, color: "var(--text-secondary)", margin: 0 }}>Free months earned</p>
               </div>
             </div>

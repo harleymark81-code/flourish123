@@ -488,6 +488,8 @@ async def register(request: Request, data: RegisterRequest):
         "premium_expires_at": None,
         "referral_code": str(uuid.uuid4())[:8].upper(),
         "referred_by": data.referred_by or None,
+        "referral_rewarded": False,
+        "referral_count": 0,
         "streak": 0,
         "longest_streak": 0,
         "last_active_date": None,
@@ -1308,6 +1310,8 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
 
     try:
         trial_days = 7 if data.plan == "annual" else 3
+        if current_user.get("referred_by") and not current_user.get("referral_rewarded", False):
+            trial_days = 14
         session = stripe_lib.checkout.Session.create(
             mode="subscription",
             payment_method_types=["card"],
@@ -1477,39 +1481,50 @@ async def stripe_webhook(request: Request):
                                 name=upgraded_user.get("name", ""),
                                 plan=plan,
                             ))
-                        # Referral reward — find referrer and extend their premium by 30 days
-                        if referral_code:
-                            referrer = await db.users.find_one(
-                                {"referral_code": referral_code},
-                                {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "is_premium": 1}
-                            )
-                            if referrer and referrer.get("email") != (upgraded_user or {}).get("email"):
-                                # Extend premium: add 30 days from current expiry or from now
-                                current_expiry = referrer.get("premium_expires_at")
-                                try:
-                                    base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
-                                    # Ensure base is timezone-aware
-                                    if base.tzinfo is None:
-                                        base = base.replace(tzinfo=timezone.utc)
-                                    # Never extend from the past — start from now if already expired
-                                    if base < datetime.now(timezone.utc):
-                                        base = datetime.now(timezone.utc)
-                                    new_expiry = (base + timedelta(days=30)).isoformat()
-                                except Exception:
-                                    new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                                await db.users.update_one(
-                                    {"_id": referrer["_id"]},
-                                    {"$set": {
-                                        "is_premium": True,
-                                        "premium_expires_at": new_expiry,
-                                    }}
+                        # Referral reward — double-sided: +30 days referrer, guarded by referral_rewarded
+                        try:
+                            if referral_code:
+                                sub_user = await db.users.find_one(
+                                    {"_id": ObjectId(user_id)},
+                                    {"referral_rewarded": 1}
                                 )
-                                logger.info(f"Referral reward: extended {referrer.get('email')} premium to {new_expiry}")
-                                asyncio.create_task(send_referral_reward_email(
-                                    to=referrer.get("email", ""),
-                                    referrer_name=referrer.get("name", ""),
-                                    referred_name=upgraded_user.get("name", "") if upgraded_user else "",
-                                ))
+                                if not (sub_user or {}).get("referral_rewarded", False):
+                                    referrer = await db.users.find_one(
+                                        {"referral_code": referral_code},
+                                        {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "is_premium": 1}
+                                    )
+                                    if referrer and referrer.get("email") != (upgraded_user or {}).get("email"):
+                                        if referrer.get("is_premium"):
+                                            current_expiry = referrer.get("premium_expires_at")
+                                            try:
+                                                base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
+                                                if base.tzinfo is None:
+                                                    base = base.replace(tzinfo=timezone.utc)
+                                                if base < datetime.now(timezone.utc):
+                                                    base = datetime.now(timezone.utc)
+                                                new_expiry = (base + timedelta(days=30)).isoformat()
+                                            except Exception:
+                                                new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                                            await db.users.update_one(
+                                                {"_id": referrer["_id"]},
+                                                {"$set": {"premium_expires_at": new_expiry}}
+                                            )
+                                            logger.info(f"Referral reward granted: {referrer.get('email')} +30 days")
+                                            asyncio.create_task(send_referral_reward_email(
+                                                to=referrer.get("email", ""),
+                                                referrer_name=referrer.get("name", ""),
+                                                referred_name=(upgraded_user or {}).get("name", ""),
+                                            ))
+                                        await db.users.update_one(
+                                            {"_id": referrer["_id"]},
+                                            {"$inc": {"referral_count": 1}}
+                                        )
+                                    await db.users.update_one(
+                                        {"_id": ObjectId(user_id)},
+                                        {"$set": {"referral_rewarded": True}}
+                                    )
+                        except Exception as e:
+                            logger.error(f"Referral reward failed (non-blocking): {e}")
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
@@ -1669,6 +1684,23 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
         "monthly_commission": round(monthly_refs * 12.99 * 0.30, 2),
         "annual_commission": round(annual_refs * 49.99 * 0.30, 2),
         "total_commission": round((monthly_refs * 12.99 + annual_refs * 49.99) * 0.30, 2)
+    }
+
+@api_router.get("/referrals/stats")
+async def get_referrals_stats(current_user: dict = Depends(get_current_user)):
+    uid = current_user.get("id") or current_user.get("_id")
+    referral_code = current_user.get("referral_code", "")
+    if not referral_code:
+        referral_code = str(uuid.uuid4())[:8].upper()
+        await db.users.update_one(
+            {"_id": ObjectId(uid)},
+            {"$set": {"referral_code": referral_code}}
+        )
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"https://theflourishapp.health?ref={referral_code}",
+        "referral_count": current_user.get("referral_count", 0),
+        "referral_rewarded": current_user.get("referral_rewarded", False),
     }
 
 # ── AFFILIATE ─────────────────────────────────────────────────────────────────
