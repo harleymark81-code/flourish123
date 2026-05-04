@@ -170,21 +170,17 @@ def _lock_list(*items: str) -> str:
 async def send_welcome_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"
     body = (
-        _h1("Welcome to Flourish, " + first)
-        + _p("You've just taken the first step towards understanding exactly how food is affecting your body.")
-        + _p("Flourish rates every food you scan across four dimensions personalised to your specific health conditions -- so you never have to guess again.")
+        _h1("Welcome to Flourish, " + first + ".")
+        + _p("You’ve just taken the first step towards understanding exactly how food is affecting your body — and we built this specifically for you.")
+        + _p("Your profile is set up. Now it’s time to use it.")
         + _highlight_box(
-            '<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:' + PURPLE + ';text-transform:uppercase;letter-spacing:0.8px;">What you can do right now</p>'
-            + _check_list(
-                "Scan any food and get your personalised score",
-                "See how it scores on naturalness",
-                "Get your 3 free scans per day",
-            )
+            '<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:' + PURPLE + ';text-transform:uppercase;letter-spacing:0.8px;">Your Free Scan</p>'
+            + '<p style="margin:0;font-size:15px;color:' + TEXT + ';line-height:1.65;">You have one full premium scan waiting. Use it on any food — search by name or scan a barcode — and you’ll see your complete personalised breakdown across all four dimensions: Naturalness, Hormonal Impact, Inflammation, and Gut Health.</p>'
         )
-        + _p("Upgrade to Premium and unlock your full hormonal impact score, inflammation rating, gut health score, food diary, and unlimited scans.", muted=True)
-        + _btn("Start Scanning", FRONTEND_URL)
+        + _btn("Claim my free scan →", "https://theflourishapp.health")
+        + _p("After your free scan, you’ll see exactly what Flourish Premium gives you every day. No generic advice. No one-size-fits-all scores. Just food intelligence built around your conditions.", muted=True)
     )
-    return await send_email(to, "Welcome to Flourish", _wrap(body))
+    return await send_email(to, "Welcome to Flourish, " + first + " — your free scan is ready.", _wrap(body))
 
 
 # -- 2. Subscription confirmed -------------------------------------------------

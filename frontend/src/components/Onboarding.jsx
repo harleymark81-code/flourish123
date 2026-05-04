@@ -127,6 +127,7 @@ export default function Onboarding({ onComplete }) {
   const [loadingPct, setLoadingPct] = useState(0);
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [featuresShown, setFeaturesShown] = useState(0);
+  const [saving, setSaving] = useState(false);
 
   const firstName = user?.name?.split(" ")[0] || "";
 
@@ -191,7 +192,6 @@ export default function Onboarding({ onComplete }) {
       conditions,
       goals: [goal].filter(Boolean),
       managing_duration: howLong,
-      onboarding_completed: true,
       struggles,
       diet_style: dietStyle,
       goal,
@@ -638,7 +638,26 @@ export default function Onboarding({ onComplete }) {
                   </motion.div>
                 ))}
               </div>
-              <Btn onClick={onComplete}>Scan my first food free →</Btn>
+              <Btn loading={saving} onClick={async () => {
+                setSaving(true);
+                try {
+                  await updateProfile({
+                    age: age ? parseInt(age, 10) : undefined,
+                    conditions,
+                    goals: [goal].filter(Boolean),
+                    managing_duration: howLong,
+                    onboarding_completed: true,
+                    struggles,
+                    diet_style: dietStyle,
+                    goal,
+                    meals_per_day: mealsPerDay,
+                    appearance_preference: appearance,
+                  });
+                } catch (e) {
+                  console.error("[Onboarding] completion save failed:", e);
+                }
+                onComplete();
+              }}>Scan my first food free →</Btn>
             </motion.div>
           )}
 

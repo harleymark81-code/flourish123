@@ -367,7 +367,7 @@ class ProfileUpdateRequest(BaseModel):
     goals: List[str]
     managing_duration: Optional[str] = Field(default="", max_length=100)
     food_challenge: Optional[str] = Field(default="", max_length=200)
-    onboarding_completed: Optional[bool] = True
+    onboarding_completed: Optional[bool] = None
     severity: Optional[str] = Field(default="", max_length=50)
     current_symptoms: Optional[List[str]] = None
     medications: Optional[str] = Field(default="", max_length=300)
@@ -613,11 +613,12 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
         "goals": data.goals,
         "managing_duration": data.managing_duration,
         "food_challenge": data.food_challenge,
-        "onboarding_completed": data.onboarding_completed,
         "severity": data.severity or "",
         "medications": data.medications or "",
         "cycle_tracking": data.cycle_tracking or False,
     }
+    if data.onboarding_completed is not None:
+        update["onboarding_completed"] = data.onboarding_completed
     if data.current_symptoms is not None:
         update["current_symptoms"] = data.current_symptoms
     if data.struggles is not None:
