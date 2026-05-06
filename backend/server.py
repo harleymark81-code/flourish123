@@ -1540,31 +1540,26 @@ async def stripe_webhook(request: Request):
                                         {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "is_premium": 1}
                                     )
                                     if referrer and referrer.get("email") != (upgraded_user or {}).get("email"):
-                                        if referrer.get("is_premium"):
-                                            current_expiry = referrer.get("premium_expires_at")
-                                            try:
-                                                base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
-                                                if base.tzinfo is None:
-                                                    base = base.replace(tzinfo=timezone.utc)
-                                                if base < datetime.now(timezone.utc):
-                                                    base = datetime.now(timezone.utc)
-                                                new_expiry = (base + timedelta(days=30)).isoformat()
-                                            except Exception:
-                                                new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                                            await db.users.update_one(
-                                                {"_id": referrer["_id"]},
-                                                {"$set": {"premium_expires_at": new_expiry}}
-                                            )
-                                            logger.info(f"Referral reward granted: {referrer.get('email')} +30 days")
-                                            asyncio.create_task(send_referral_reward_email(
-                                                to=referrer.get("email", ""),
-                                                referrer_name=referrer.get("name", ""),
-                                                referred_name=(upgraded_user or {}).get("name", ""),
-                                            ))
+                                        current_expiry = referrer.get("premium_expires_at")
+                                        try:
+                                            base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
+                                            if base.tzinfo is None:
+                                                base = base.replace(tzinfo=timezone.utc)
+                                            if base < datetime.now(timezone.utc):
+                                                base = datetime.now(timezone.utc)
+                                            new_expiry = (base + timedelta(days=30)).isoformat()
+                                        except Exception:
+                                            new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
                                         await db.users.update_one(
                                             {"_id": referrer["_id"]},
-                                            {"$inc": {"referral_count": 1}}
+                                            {"$set": {"premium_expires_at": new_expiry, "is_premium": True}, "$inc": {"referral_count": 1}}
                                         )
+                                        logger.info(f"Referral reward granted: {referrer.get('email')} +30 days")
+                                        asyncio.create_task(send_referral_reward_email(
+                                            to=referrer.get("email", ""),
+                                            referrer_name=referrer.get("name", ""),
+                                            referred_name=(upgraded_user or {}).get("name", ""),
+                                        ))
                                     await db.users.update_one(
                                         {"_id": ObjectId(user_id)},
                                         {"$set": {"referral_rewarded": True}}
@@ -1703,7 +1698,7 @@ async def create_portal_session(current_user: dict = Depends(get_current_user)):
 async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
     referral_code = current_user.get("referral_code", "")
-    frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.netlify.app")
+    frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")
 
     # Older accounts may have been created before the referral_code field was
     # added — generate one lazily and persist it so the link always works.
@@ -1742,11 +1737,15 @@ async def get_referrals_stats(current_user: dict = Depends(get_current_user)):
             {"_id": ObjectId(uid)},
             {"$set": {"referral_code": referral_code}}
         )
+    fresh = await db.users.find_one(
+        {"_id": ObjectId(uid)},
+        {"referral_count": 1, "referral_rewarded": 1}
+    ) or {}
     return {
         "referral_code": referral_code,
         "referral_link": f"https://theflourishapp.health?ref={referral_code}",
-        "referral_count": current_user.get("referral_count", 0),
-        "referral_rewarded": current_user.get("referral_rewarded", False),
+        "referral_count": fresh.get("referral_count", 0),
+        "referral_rewarded": fresh.get("referral_rewarded", False),
     }
 
 # ── AFFILIATE ─────────────────────────────────────────────────────────────────
