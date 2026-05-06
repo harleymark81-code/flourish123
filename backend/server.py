@@ -1423,6 +1423,9 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
                     is_trial = (payment_status == "no_payment_required")
                     if is_trial:
                         trial_days = 7 if plan == "annual" else 3
+                        trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1})
+                        if (trial_user_doc or {}).get("referred_by") and not (trial_user_doc or {}).get("referral_rewarded", False):
+                            trial_days = 14
                         expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                     else:
                         expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
@@ -1505,6 +1508,9 @@ async def stripe_webhook(request: Request):
                         # For paid: grant based on plan duration.
                         if is_trial:
                             trial_days = 7 if plan == "annual" else 3
+                            trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1})
+                            if (trial_user_doc or {}).get("referred_by") and not (trial_user_doc or {}).get("referral_rewarded", False):
+                                trial_days = 14
                             expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                         else:
                             expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
@@ -1527,45 +1533,6 @@ async def stripe_webhook(request: Request):
                                 name=upgraded_user.get("name", ""),
                                 plan=plan,
                             ))
-                        # Referral reward — double-sided: +30 days referrer, guarded by referral_rewarded
-                        try:
-                            if referral_code:
-                                sub_user = await db.users.find_one(
-                                    {"_id": ObjectId(user_id)},
-                                    {"referral_rewarded": 1}
-                                )
-                                if not (sub_user or {}).get("referral_rewarded", False):
-                                    referrer = await db.users.find_one(
-                                        {"referral_code": referral_code},
-                                        {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "is_premium": 1}
-                                    )
-                                    if referrer and referrer.get("email") != (upgraded_user or {}).get("email"):
-                                        current_expiry = referrer.get("premium_expires_at")
-                                        try:
-                                            base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
-                                            if base.tzinfo is None:
-                                                base = base.replace(tzinfo=timezone.utc)
-                                            if base < datetime.now(timezone.utc):
-                                                base = datetime.now(timezone.utc)
-                                            new_expiry = (base + timedelta(days=30)).isoformat()
-                                        except Exception:
-                                            new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-                                        await db.users.update_one(
-                                            {"_id": referrer["_id"]},
-                                            {"$set": {"premium_expires_at": new_expiry, "is_premium": True}, "$inc": {"referral_count": 1}}
-                                        )
-                                        logger.info(f"Referral reward granted: {referrer.get('email')} +30 days")
-                                        asyncio.create_task(send_referral_reward_email(
-                                            to=referrer.get("email", ""),
-                                            referrer_name=referrer.get("name", ""),
-                                            referred_name=(upgraded_user or {}).get("name", ""),
-                                        ))
-                                    await db.users.update_one(
-                                        {"_id": ObjectId(user_id)},
-                                        {"$set": {"referral_rewarded": True}}
-                                    )
-                        except Exception as e:
-                            logger.error(f"Referral reward failed (non-blocking): {e}")
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
@@ -1643,6 +1610,52 @@ async def stripe_webhook(request: Request):
                         {"$set": {"is_premium": True, "is_trialing": False, "premium_expires_at": expires}}
                     )
                     logger.info(f"Premium renewed for user {uid} ({plan}, +{days}d)")
+                    # Referral reward — fires on first real payment only, capped at 12 rewards per referrer
+                    try:
+                        paying_user = await db.users.find_one(
+                            {"_id": ObjectId(uid)},
+                            {"referred_by": 1, "referral_rewarded": 1, "name": 1, "email": 1}
+                        )
+                        ref_code = (paying_user or {}).get("referred_by", "")
+                        if ref_code and not (paying_user or {}).get("referral_rewarded", False):
+                            referrer = await db.users.find_one(
+                                {"referral_code": ref_code},
+                                {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "referral_count": 1}
+                            )
+                            if referrer and referrer.get("email") != (paying_user or {}).get("email"):
+                                if referrer.get("referral_count", 0) < 12:
+                                    current_expiry = referrer.get("premium_expires_at")
+                                    try:
+                                        base = datetime.fromisoformat(current_expiry) if current_expiry else datetime.now(timezone.utc)
+                                        if base.tzinfo is None:
+                                            base = base.replace(tzinfo=timezone.utc)
+                                        if base < datetime.now(timezone.utc):
+                                            base = datetime.now(timezone.utc)
+                                        new_expiry = (base + timedelta(days=30)).isoformat()
+                                    except Exception:
+                                        new_expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                                    await db.users.update_one(
+                                        {"_id": referrer["_id"]},
+                                        {"$set": {"premium_expires_at": new_expiry, "is_premium": True}, "$inc": {"referral_count": 1}}
+                                    )
+                                    logger.info(f"Referral reward granted: {referrer.get('email')} +30 days")
+                                    asyncio.create_task(send_referral_reward_email(
+                                        to=referrer.get("email", ""),
+                                        referrer_name=referrer.get("name", ""),
+                                        referred_name=(paying_user or {}).get("name", ""),
+                                    ))
+                                else:
+                                    await db.users.update_one(
+                                        {"_id": referrer["_id"]},
+                                        {"$inc": {"referral_count": 1}}
+                                    )
+                                    logger.info(f"Referral cap reached for {referrer.get('email')} — count incremented, no reward")
+                            await db.users.update_one(
+                                {"_id": ObjectId(uid)},
+                                {"$set": {"referral_rewarded": True}}
+                            )
+                    except Exception as e:
+                        logger.error(f"Referral reward failed (non-blocking): {e}")
 
         elif event_type == "invoice.payment_failed":
             customer_id = data_obj.get("customer")
