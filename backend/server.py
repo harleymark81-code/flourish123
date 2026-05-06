@@ -124,6 +124,31 @@ async def _send_reengagement_emails():
     """Cron: daily 10:00 UTC — send re-engagement email to abandoned users (24 h+, not yet emailed)."""
     await send_reengagement_email(db)
 
+# ── Trial ending cron task ────────────────────────────────────────────────────
+async def _send_trial_ending_emails():
+    """Cron: daily 09:00 UTC — notify trial users whose trial ends within the next 24 hours."""
+    logger_t = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    in_24h = now + timedelta(hours=24)
+    users = await db.users.find(
+        {
+            "is_premium": True,
+            "trial_end": {"$gte": now, "$lte": in_24h},
+            "trial_ending_email_sent": {"$ne": True},
+        }
+    ).to_list(10000)
+
+    sent = 0
+    for user in users:
+        ok = await send_trial_ending_email(to=user["email"], name=user.get("name", ""))
+        if ok:
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"trial_ending_email_sent": True}},
+            )
+            sent += 1
+    logger_t.info(f"Trial ending emails: sent {sent}/{len(users)} emails")
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -183,6 +208,13 @@ async def lifespan(app: FastAPI):
         _send_reengagement_emails,
         CronTrigger(hour=10, minute=0, timezone="UTC"),
         id="reengagement_emails",
+        replace_existing=True,
+    )
+    # ── Trial ending cron ──
+    _scheduler.add_job(
+        _send_trial_ending_emails,
+        CronTrigger(hour=9, minute=0, timezone="UTC"),
+        id="trial_ending_emails",
         replace_existing=True,
     )
     _scheduler.start()

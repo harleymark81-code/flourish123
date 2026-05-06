@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 FROM_ADDRESS = "Flourish <hello@mail.theflourishapp.health>"
 REPLY_TO = "hello@theflourishapp.health"
-FRONTEND_URL = "https://theflourishapp.netlify.app"
+FRONTEND_URL = "https://theflourishapp.health"
 
 # -- Brand colours -------------------------------------------------------------
 PURPLE      = "#534AB7"
