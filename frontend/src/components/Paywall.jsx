@@ -104,6 +104,11 @@ export default function Paywall({ onClose, user: userProp, entryPoint = "default
   const entryMsg = ENTRY_MESSAGES[entryPoint] || ENTRY_MESSAGES.default;
 
   useEffect(() => {
+    ph.upgradeModalViewed(entryPoint);
+    ph.paywallHit(entryPoint);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     const t = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 4000);
     const n = setInterval(() => setNudgeIdx(i => (i + 1) % NUDGE_QUOTES.length), 5000);
     return () => { clearInterval(t); clearInterval(n); };

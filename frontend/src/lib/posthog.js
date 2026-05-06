@@ -142,6 +142,7 @@ export const ph = {
   referralLinkCopied: () => track("referral_link_copied"),
   referralLinkShared: () => track("referral_link_shared"),
   manageSubscriptionClicked: () => track("manage_subscription_clicked"),
+  subscriptionCancelled: () => track("subscription_cancelled"),
 
   // Navigation
   tabChanged: (tab_name) => track("tab_changed", { tab_name }),

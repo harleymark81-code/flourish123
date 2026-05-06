@@ -138,6 +138,7 @@ function AppContent() {
       window.history.replaceState({}, "", "/");
     }
     if (params.get("cancelled") === "true") {
+      ph.subscriptionCancelled();
       setShowCancelledMsg(true);
       setTimeout(() => setShowCancelledMsg(false), 6000);
       window.history.replaceState({}, "", "/");

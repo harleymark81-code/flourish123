@@ -47,7 +47,9 @@ export default function FoodDiary() {
     try {
       const res = await axios.get(`${API}/diary?date=${date}`, { headers: getHeaders(), withCredentials: true });
       setEntries(res.data.entries || []);
-      setLocked(res.data.locked || false);
+      const isLocked = res.data.locked || false;
+      setLocked(isLocked);
+      if (isLocked) ph.diaryLockedHit();
     } catch (e) {
       console.error("[Flourish] FoodDiary error:", e);
     }

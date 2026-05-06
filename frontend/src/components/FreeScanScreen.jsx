@@ -110,6 +110,7 @@ export default function FreeScanScreen({ onComplete }) {
         headers: getHeaders(), withCredentials: true,
       });
       setResult(res.data);
+      ph.scanLimitReached();
       setPhase("result");
     } catch (e) {
       const msg = e.response?.data?.detail;

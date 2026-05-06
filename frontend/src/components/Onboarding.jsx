@@ -663,6 +663,7 @@ export default function Onboarding({ onComplete }) {
                 } finally {
                   setSaving(false);
                 }
+                ph.onboardingCompleted(conditions, [goal].filter(Boolean));
                 onComplete();
               }}>Scan my first food free →</Btn>
             </motion.div>
