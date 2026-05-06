@@ -12,6 +12,7 @@ Usage:
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone, timedelta
 
 import resend
 
@@ -389,7 +390,48 @@ async def send_support_email(to: str, user_email: str, user_name: str, subject: 
     return await send_email(to, "Flourish Support: " + subject, _wrap(body))
 
 
-# -- 9. Cancellation -----------------------------------------------------------
+# -- 9. Re-engagement ---------------------------------------------------------
+
+async def send_reengagement_email(db) -> None:
+    """Send a one-time re-engagement email to users who abandoned 24+ hours ago."""
+    log = logging.getLogger(__name__)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    users = await db.users.find(
+        {
+            "abandoned": True,
+            "abandoned_at": {"$lte": cutoff.isoformat()},
+            "reengagement_email_sent": {"$ne": True},
+        },
+        {"_id": 1, "email": 1, "name": 1},
+    ).to_list(10000)
+
+    sent = 0
+    for user in users:
+        to = user.get("email")
+        if not to:
+            continue
+        first = (user.get("name") or "there").split()[0]
+        body = (
+            _h1("We miss you, " + first + ".")
+            + _p("You started something great with Flourish -- and your personalised food profile is still here, ready and waiting.")
+            + _highlight_box(
+                '<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:' + PURPLE + ';text-transform:uppercase;letter-spacing:0.8px;">Your free scan is still available</p>'
+                + _p("Come back and use it. See exactly how your food choices are affecting your body -- scored across Naturalness, Hormonal Impact, Inflammation, and Gut Health.")
+            )
+            + _p("It takes less than a minute and the insights are built entirely around your health conditions.", muted=True)
+            + _btn("Pick up where I left off", FRONTEND_URL)
+        )
+        ok = await send_email(to, "We saved your Flourish profile, " + first + " — come back and use it", _wrap(body))
+        if ok:
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"reengagement_email_sent": True}},
+            )
+            sent += 1
+    log.info("[reengagement] sent %d/%d emails", sent, len(users))
+
+
+# -- 10. Cancellation ----------------------------------------------------------
 
 async def send_cancellation_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"

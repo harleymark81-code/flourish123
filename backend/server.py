@@ -82,6 +82,7 @@ from services.email import (
     send_weekly_report_email,
     send_cancellation_email,
     send_support_email,
+    send_reengagement_email,
 )
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
@@ -117,6 +118,11 @@ async def _send_weekly_reports():
         if ok:
             sent += 1
     logger_w.info(f"Weekly reports: sent {sent}/{len(users)} emails")
+
+# ── Re-engagement cron task ───────────────────────────────────────────────────
+async def _send_reengagement_emails():
+    """Cron: daily 10:00 UTC — send re-engagement email to abandoned users (24 h+, not yet emailed)."""
+    await send_reengagement_email(db)
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -170,6 +176,13 @@ async def lifespan(app: FastAPI):
         _send_weekly_reports,
         CronTrigger(day_of_week="sun", hour=9, minute=0, timezone="UTC"),
         id="weekly_reports",
+        replace_existing=True,
+    )
+    # ── Re-engagement cron ──
+    _scheduler.add_job(
+        _send_reengagement_emails,
+        CronTrigger(hour=10, minute=0, timezone="UTC"),
+        id="reengagement_emails",
         replace_existing=True,
     )
     _scheduler.start()
