@@ -2306,7 +2306,8 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             {"email": email},
             {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
         )
-        reset_link = f"https://theflourishapp.netlify.app/reset-password?token={token}"
+        frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")
+        reset_link = f"{frontend_url}/reset-password?token={token}"
         ok = await send_password_reset_email(
             to=email,
             name=user.get("name", ""),
