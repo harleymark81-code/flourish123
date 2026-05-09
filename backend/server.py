@@ -27,6 +27,19 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# ── PostHog (server-side analytics) ──────────────────────────────────────────
+import posthog as _ph
+_ph.project_api_key = os.environ.get("POSTHOG_API_KEY", "")
+_ph.host = "https://eu.i.posthog.com"
+_ph.disabled = not os.environ.get("POSTHOG_API_KEY", "")
+
+def _ph_capture(distinct_id: str, event: str, properties: dict = None):
+    if _ph.project_api_key:
+        try:
+            _ph.capture(distinct_id, event, properties or {})
+        except Exception:
+            pass
+
 # ── Anthropic helper with retry ────────────────────────────────────────────────
 ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 
@@ -1243,10 +1256,12 @@ Return ONLY a JSON array, no markdown:
             {"$set": {"patterns": patterns_list, "generated_at": now.isoformat(), "diary_count_at_generation": total_diary}},
             upsert=True
         )
+        _ph_capture(current_user.get("email", ""), "patterns_viewed", {"total_diary": total_diary, "pattern_count": len(patterns_list)})
         return {"patterns": patterns_list, "total_diary": total_diary, "needed": 7}
     except Exception as e:
         logger.error(f"Patterns AI error: {e}")
         if cached and cached.get("patterns"):
+            _ph_capture(current_user.get("email", ""), "patterns_viewed", {"total_diary": total_diary, "pattern_count": len(cached["patterns"]), "from_cache": True})
             return {"patterns": cached["patterns"], "total_diary": total_diary, "needed": 7}
         return {"patterns": [], "total_diary": total_diary, "needed": 7, "message": "Analysis unavailable right now. Keep logging!"}
 
@@ -1592,6 +1607,7 @@ async def stripe_webhook(request: Request):
                                 name=upgraded_user.get("name", ""),
                                 plan=plan,
                             ))
+                            _ph_capture(upgraded_user.get("email", user_id), "subscription_started", {"plan": plan, "is_trial": is_trial})
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
@@ -1649,6 +1665,7 @@ async def stripe_webhook(request: Request):
                             to=cancelled_user.get("email", ""),
                             name=cancelled_user.get("name", ""),
                         ))
+                        _ph_capture(cancelled_user.get("email", uid), "subscription_cancelled", {})
 
         elif event_type == "invoice.payment_succeeded":
             customer_id = data_obj.get("customer")
@@ -1703,6 +1720,7 @@ async def stripe_webhook(request: Request):
                                         referrer_name=referrer.get("name", ""),
                                         referred_name=(paying_user or {}).get("name", ""),
                                     ))
+                                    _ph_capture(referrer.get("email", str(referrer["_id"])), "referral_reward_earned", {"referred_user": (paying_user or {}).get("email", "")})
                                 else:
                                     await db.users.update_one(
                                         {"_id": referrer["_id"]},
