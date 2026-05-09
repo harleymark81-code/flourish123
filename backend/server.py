@@ -1720,19 +1720,23 @@ async def stripe_webhook(request: Request):
                         {"$set": {"is_premium": True, "is_trialing": False, "premium_expires_at": expires}}
                     )
                     logger.info(f"Premium renewed for user {uid} ({plan}, +{days}d)")
-                    # Referral reward — fires on first real payment only, capped at 12 rewards per referrer
+                    # Referral reward — fires on first real payment only, capped at 12 rewards per referrer.
+                    # Use an atomic compare-and-set on referral_rewarded to prevent double-rewarding when
+                    # Stripe re-delivers invoice.payment_succeeded for the same invoice.
                     try:
-                        paying_user = await db.users.find_one(
-                            {"_id": ObjectId(uid)},
-                            {"referred_by": 1, "referral_rewarded": 1, "name": 1, "email": 1}
+                        claim = await db.users.find_one_and_update(
+                            {"_id": ObjectId(uid), "referral_rewarded": {"$ne": True}, "referred_by": {"$nin": [None, ""]}},
+                            {"$set": {"referral_rewarded": True}},
+                            projection={"referred_by": 1, "name": 1, "email": 1},
+                            return_document=False,  # pre-update doc
                         )
-                        ref_code = (paying_user or {}).get("referred_by", "")
-                        if ref_code and not (paying_user or {}).get("referral_rewarded", False):
+                        if claim:
+                            ref_code = claim.get("referred_by", "")
                             referrer = await db.users.find_one(
                                 {"referral_code": ref_code},
                                 {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "referral_count": 1}
                             )
-                            if referrer and referrer.get("email") != (paying_user or {}).get("email"):
+                            if referrer and referrer.get("email") != claim.get("email"):
                                 if referrer.get("referral_count", 0) < 12:
                                     current_expiry = referrer.get("premium_expires_at")
                                     try:
@@ -1752,19 +1756,15 @@ async def stripe_webhook(request: Request):
                                     asyncio.create_task(send_referral_reward_email(
                                         to=referrer.get("email", ""),
                                         referrer_name=referrer.get("name", ""),
-                                        referred_name=(paying_user or {}).get("name", ""),
+                                        referred_name=claim.get("name", ""),
                                     ))
-                                    _ph_capture(referrer.get("email", str(referrer["_id"])), "referral_reward_earned", {"referred_user": (paying_user or {}).get("email", "")})
+                                    _ph_capture(referrer.get("email", str(referrer["_id"])), "referral_reward_earned", {"referred_user": claim.get("email", "")})
                                 else:
                                     await db.users.update_one(
                                         {"_id": referrer["_id"]},
                                         {"$inc": {"referral_count": 1}}
                                     )
                                     logger.info(f"Referral cap reached for {referrer.get('email')} — count incremented, no reward")
-                            await db.users.update_one(
-                                {"_id": ObjectId(uid)},
-                                {"$set": {"referral_rewarded": True}}
-                            )
                     except Exception as e:
                         logger.error(f"Referral reward failed (non-blocking): {e}")
 
