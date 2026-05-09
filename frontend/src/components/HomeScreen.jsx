@@ -230,12 +230,12 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
 
   const checkStreakReward = async () => {
     const today = new Date().toISOString().split("T")[0];
-    const dismissedDate = localStorage.getItem("fl_streak_dismissed");
-    if (dismissedDate === today) return;
+    if (localStorage.getItem("streak_modal_last_shown") === today) return;
 
     try {
       const res = await axios.get(`${API}/streak/reward`, { headers: getHeaders(), withCredentials: true });
       if (res.data.reward) {
+        localStorage.setItem("streak_modal_last_shown", today);
         setStreakReward(res.data.reward);
         setShowReward(true);
         // Check for milestones
@@ -254,7 +254,7 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
 
   const dismissStreakReward = () => {
     const today = new Date().toISOString().split("T")[0];
-    localStorage.setItem("fl_streak_dismissed", today);
+    localStorage.setItem("streak_modal_last_shown", today);
     setShowReward(false);
   };
 
