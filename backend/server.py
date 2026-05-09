@@ -1815,7 +1815,7 @@ async def get_referrals_stats(current_user: dict = Depends(get_current_user)):
     ) or {}
     return {
         "referral_code": referral_code,
-        "referral_link": f"https://theflourishapp.health?ref={referral_code}",
+        "referral_link": f"{os.environ.get('FRONTEND_URL', 'https://theflourishapp.health')}?ref={referral_code}",
         "referral_count": fresh.get("referral_count", 0),
         "referral_rewarded": fresh.get("referral_rewarded", False),
     }
