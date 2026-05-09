@@ -24,7 +24,7 @@ export default function AffiliateDashboard() {
       .finally(() => setLoading(false));
   }, [refCode]);
 
-  const affiliateLink = `https://theflourishapp.netlify.app?ref=${refCode || "YOUR_CODE"}`;
+  const affiliateLink = `https://theflourishapp.health?ref=${refCode || "YOUR_CODE"}`;
 
   const handleShare = async () => {
     if (navigator.share) {

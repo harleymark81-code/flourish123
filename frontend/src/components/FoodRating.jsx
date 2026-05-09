@@ -280,7 +280,7 @@ export default function FoodRating({ rating, onBack, onRateFood }) {
 
   const handleShare = async () => {
     ph.ratingShared(foodName, rating.overallScore);
-    const text = `I just rated ${foodName} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://theflourishapp.netlify.app`;
+    const text = `I just rated ${foodName} on Flourish — score: ${rating.overallScore}/100.\n\n${rating.verdict}\n\nGet Flourish: https://theflourishapp.health`;
     if (navigator.share) {
       await navigator.share({ title: "Flourish Food Rating", text }).catch(() => {});
     } else {
