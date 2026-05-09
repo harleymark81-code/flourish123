@@ -1529,8 +1529,33 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
         return {"status": "unknown", "payment_status": "unknown", "is_success": False}
 
 async def _find_uid_by_customer(customer_id: str) -> Optional[str]:
+    """Resolve a Stripe customer ID to a Flourish user.
+
+    Primary lookup: payment_transactions.stripe_customer_id (set by checkout.session.completed).
+    Fallback: query Stripe for the customer's email and match against db.users.
+
+    The fallback is essential — Stripe may deliver invoice.payment_succeeded BEFORE
+    checkout.session.completed, in which case the transaction row has no customer_id yet.
+    Without the fallback the upgrade is silently dropped."""
     txn = await db.payment_transactions.find_one({"stripe_customer_id": customer_id})
-    return txn.get("user_id") if txn else None
+    if txn and txn.get("user_id"):
+        return txn["user_id"]
+    try:
+        stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "").strip()
+        cust = stripe_lib.Customer.retrieve(customer_id)
+        email = (getattr(cust, "email", None) or "").lower().strip()
+        if email:
+            user = await db.users.find_one({"email": email}, {"_id": 1})
+            if user:
+                # Backfill the transaction so future events resolve from the DB
+                await db.payment_transactions.update_many(
+                    {"user_id": str(user["_id"]), "stripe_customer_id": {"$exists": False}},
+                    {"$set": {"stripe_customer_id": customer_id}}
+                )
+                return str(user["_id"])
+    except Exception as e:
+        logger.warning(f"_find_uid_by_customer fallback failed for {customer_id}: {e}")
+    return None
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
