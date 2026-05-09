@@ -221,7 +221,7 @@ async def send_trial_ending_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"
     body = (
         _h1("Your free trial ends tomorrow")
-        + _p("Hi " + first + ", just a quick heads-up -- your 3-day Flourish Premium trial ends in 24 hours.")
+        + _p("Hi " + first + ", just a quick heads-up -- your Flourish Premium trial ends in 24 hours.")
         + _p("After that, you'll move to the free plan and lose access to:")
         + (
             '<ul style="margin:0 0 20px;padding-left:20px;font-size:15px;color:' + TEXT_MUTED + ';line-height:1.9;">'
