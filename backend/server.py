@@ -1596,6 +1596,16 @@ async def stripe_webhook(request: Request):
 
             if session_id and (payment_status in ["paid", "no_payment_required"]):
                 is_trial = (payment_status == "no_payment_required")
+                # Idempotency: skip the upgrade + confirmation email if this session has
+                # already been processed. Stripe re-delivers events on transient errors and
+                # we don't want to send duplicate confirmation emails on retry.
+                existing_txn = await db.payment_transactions.find_one(
+                    {"session_id": session_id},
+                    {"payment_status": 1}
+                )
+                already_processed = bool(
+                    existing_txn and existing_txn.get("payment_status") in ("paid", "trialing")
+                )
                 update_fields = {
                     "payment_status": "paid" if not is_trial else "trialing",
                     "status": "complete",
@@ -1609,7 +1619,7 @@ async def stripe_webhook(request: Request):
                     {"session_id": session_id},
                     {"$set": update_fields}
                 )
-                if user_id:
+                if user_id and not already_processed:
                     try:
                         # For trials: grant access for trial period only (Stripe revokes via webhook on expiry).
                         # For paid: grant based on plan duration.
