@@ -13,19 +13,17 @@ export default function BarcodeScanner({ onResult, onClose }) {
   useEffect(() => {
     ph.barcodeScannerOpened();
     let cancelled = false;
+    let timer;
 
     const start = async () => {
+      if (cancelled || !videoRef.current) return;
       try {
         const reader = new BrowserMultiFormatReader();
 
+        // Only specify facingMode — avoid width/height constraints that fail on
+        // low-end Android and some iOS devices.
         const controls = await reader.decodeFromConstraints(
-          {
-            video: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-          },
+          { video: { facingMode: { ideal: "environment" } } },
           videoRef.current,
           (result) => {
             if (result && !cancelled) {
@@ -58,10 +56,19 @@ export default function BarcodeScanner({ onResult, onClose }) {
       }
     };
 
-    start();
+    // Set legacy iOS inline-playback attribute via DOM (JSX can't represent
+    // hyphenated attribute names).
+    if (videoRef.current) {
+      videoRef.current.setAttribute("webkit-playsinline", "");
+    }
+
+    // Delay to ensure the video element is fully rendered in the DOM,
+    // which is required on iOS Safari before calling getUserMedia.
+    timer = setTimeout(start, 150);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       controlsRef.current?.stop();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -158,12 +165,15 @@ export default function BarcodeScanner({ onResult, onClose }) {
             borderRadius: 16,
             overflow: "hidden",
             background: "#000",
-            aspectRatio: "4/3",
+            // paddingBottom = 75% gives a 4:3 ratio without relying on the
+            // aspectRatio CSS property, which isn't supported on iOS < 15.
+            paddingBottom: "75%",
+            height: 0,
             marginBottom: 20,
           }}>
             <video
               ref={videoRef}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               playsInline
               muted
               autoPlay
