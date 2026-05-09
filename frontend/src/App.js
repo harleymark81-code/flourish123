@@ -19,6 +19,8 @@ import MyFoodsScreen from "./components/MyFoodsScreen";
 import ResetPassword from "./components/ResetPassword";
 import FreeScanScreen from "./components/FreeScanScreen";
 import ReturningUserWelcome from "./components/ReturningUserWelcome";
+import PWAInstallBanner from "./components/PWAInstallBanner";
+import InstallInstructionsModal from "./components/InstallInstructionsModal";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -116,6 +118,7 @@ function AppContent() {
   const [showPaymentPending, setShowPaymentPending] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [installModalOpen, setInstallModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -317,6 +320,11 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PWA Install Banner */}
+      <PWAInstallBanner />
+      {/* iOS/Android Install Instructions Modal */}
+      <InstallInstructionsModal isOpen={installModalOpen} onClose={() => setInstallModalOpen(false)} />
     </div>
   );
 }
