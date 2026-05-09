@@ -328,8 +328,6 @@ api_router = APIRouter(prefix="/api")
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 _allow_origins = [
-    "https://theflourishapp.netlify.app",
-    "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app",
     "https://flourish123-production.up.railway.app",
     "https://theflourishapp.health",
     "https://www.theflourishapp.health",
@@ -539,9 +537,9 @@ class MealPlanRequest(BaseModel):
     regenerate: Optional[bool] = False
 
 _ALLOWED_ORIGINS = {
-    "https://theflourishapp.netlify.app",
-    "https://69d3f4f94ab7f09ab2fa371d--lovely-chaja-e17ca9.netlify.app",
     "https://flourish123-production.up.railway.app",
+    "https://theflourishapp.health",
+    "https://www.theflourishapp.health",
 }
 
 class CheckoutRequest(BaseModel):
