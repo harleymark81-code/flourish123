@@ -808,10 +808,6 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     is_free_scan = False
     if not _effective_premium(current_user):
         if current_user.get("has_used_free_scan", False):
-            asyncio.create_task(send_scan_limit_email(
-                to=current_user.get("email", ""),
-                name=current_user.get("name", ""),
-            ))
             raise HTTPException(
                 status_code=403,
                 detail="An active subscription is required. Please start your free trial to continue."
@@ -995,6 +991,10 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
                     "abandoned": False,
                 }}
             )
+            asyncio.create_task(send_scan_limit_email(
+                to=current_user.get("email", ""),
+                name=current_user.get("name", ""),
+            ))
 
         return rating_data
 
