@@ -249,8 +249,8 @@ async def send_trial_ending_email(to: str, name: str) -> bool:
 async def send_scan_limit_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"
     body = (
-        _h1("You've used all your free scans for today")
-        + _p("Hi " + first + ", you've hit your 3 free scans for today. Come back tomorrow for 3 more -- or upgrade to Premium for unlimited scans every day.")
+        _h1("You've used your free Flourish scan")
+        + _p("Hi " + first + ", you just used your free scan -- nice work taking the first step. To keep rating foods and unlock the full Flourish toolkit, start your free trial below.")
         + _highlight_box(
             '<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:' + PURPLE + ';text-transform:uppercase;letter-spacing:0.8px;">With Flourish Premium</p>'
             + _lock_list(
@@ -260,12 +260,12 @@ async def send_scan_limit_email(to: str, name: str) -> bool:
                 "Personalised meal planner",
             )
         )
-        + _p("Start your <strong>3-day free trial</strong> today -- no charge until day 4, cancel anytime.")
+        + _p("Start your <strong>free trial</strong> today -- no charge during the trial, cancel anytime.")
         + _btn("Start Free Trial", FRONTEND_URL)
         + _divider()
         + _p("Less than 43p a day. Less than one coffee a week.", muted=True)
     )
-    return await send_email(to, "You've hit your scan limit -- upgrade for unlimited scans", _wrap(body))
+    return await send_email(to, "You've used your free scan -- start your trial for unlimited", _wrap(body))
 
 
 # -- 5. Referral reward --------------------------------------------------------
