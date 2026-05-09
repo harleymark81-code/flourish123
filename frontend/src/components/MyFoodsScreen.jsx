@@ -80,6 +80,7 @@ export default function MyFoodsScreen({ onRateFood }) {
     try {
       await axios.post(`${API}/favourites`, { food_name: foodName }, { headers: getHeaders(), withCredentials: true });
       setFavourites(prev => prev.filter(f => f.food_name !== foodName));
+      ph.favouriteToggled(foodName, false);
     } catch (e) {
       console.error("[Flourish] removeFavourite error:", e);
       setActionError("Couldn't remove favourite. Please try again.");

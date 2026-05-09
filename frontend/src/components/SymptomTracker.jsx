@@ -28,6 +28,7 @@ export default function SymptomTracker({ onClose }) {
   const [todayData, setTodayData] = useState(null);
 
   useEffect(() => {
+    ph.symptomCheckinOpened();
     loadToday();
   }, []);
 

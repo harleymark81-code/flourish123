@@ -11,6 +11,7 @@ export default function BarcodeScanner({ onResult, onClose }) {
   const [manualBarcode, setManualBarcode] = useState("");
 
   useEffect(() => {
+    ph.barcodeScannerOpened();
     let cancelled = false;
 
     const start = async () => {
