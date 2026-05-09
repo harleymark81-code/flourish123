@@ -83,6 +83,7 @@ from services.email import (
     send_cancellation_email,
     send_support_email,
     send_reengagement_email,
+    send_affiliate_application_email,
 )
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
@@ -1843,6 +1844,14 @@ async def affiliate_apply(request: Request, data: AffiliateApplicationRequest):
         "submitted_at": datetime.now(timezone.utc).isoformat()
     }
     result = await db.affiliate_applications.insert_one(app_doc)
+    asyncio.create_task(
+        send_affiliate_application_email(
+            to="hello@theflourishapp.health",
+            applicant_name=data.name,
+            applicant_email=data.email,
+            affiliate_code=affiliate_code,
+        )
+    )
     return {"success": True, "id": str(result.inserted_id), "affiliate_code": affiliate_code}
 
 @api_router.get("/affiliate/dashboard")

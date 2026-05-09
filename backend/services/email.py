@@ -433,6 +433,26 @@ async def send_reengagement_email(db) -> None:
 
 # -- 10. Cancellation ----------------------------------------------------------
 
+# -- 11. Affiliate application admin notification ------------------------------
+
+async def send_affiliate_application_email(
+    to: str, applicant_name: str, applicant_email: str, affiliate_code: str
+) -> bool:
+    body = (
+        _h1("New affiliate application")
+        + _p(f"<strong>{applicant_name}</strong> ({applicant_email}) has submitted an affiliate application.")
+        + _highlight_box(
+            f'<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:{TEXT_MUTED};text-transform:uppercase;letter-spacing:0.8px;">Affiliate code</p>'
+            f'<p style="margin:0;font-size:18px;font-weight:800;color:{PURPLE};font-family:monospace;">{affiliate_code}</p>'
+        )
+        + _p("Review and approve or reject this application in the admin dashboard.", muted=True)
+        + _btn("Open admin dashboard", FRONTEND_URL + "/admin")
+    )
+    return await send_email(to, f"New affiliate application — {applicant_name}", _wrap(body))
+
+
+# -- 12. Subscription cancelled ------------------------------------------------
+
 async def send_cancellation_email(to: str, name: str) -> bool:
     first = name.split()[0] if name else "there"
     body = (
