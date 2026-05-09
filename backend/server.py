@@ -149,6 +149,32 @@ async def _send_trial_ending_emails():
             sent += 1
     logger_t.info(f"Trial ending emails: sent {sent}/{len(users)} emails")
 
+# ── Premium expiry sweep cron task ───────────────────────────────────────────
+async def _sweep_expired_premium():
+    """Cron: daily 00:00 UTC — revoke is_premium for users whose premium_expires_at has passed."""
+    logger_s = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    revoked = 0
+    async for user in db.users.find(
+        {"is_premium": True, "is_admin": {"$ne": True}},
+        {"_id": 1, "premium_expires_at": 1}
+    ):
+        raw = user.get("premium_expires_at")
+        if not raw:
+            await db.users.update_one({"_id": user["_id"]}, {"$set": {"is_premium": False}})
+            revoked += 1
+            continue
+        try:
+            expires = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            if not expires.tzinfo:
+                expires = expires.replace(tzinfo=timezone.utc)
+            if expires <= now:
+                await db.users.update_one({"_id": user["_id"]}, {"$set": {"is_premium": False}})
+                revoked += 1
+        except Exception:
+            pass
+    logger_s.info(f"Premium sweep: revoked {revoked} expired accounts")
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -215,6 +241,13 @@ async def lifespan(app: FastAPI):
         _send_trial_ending_emails,
         CronTrigger(hour=9, minute=0, timezone="UTC"),
         id="trial_ending_emails",
+        replace_existing=True,
+    )
+    # ── Premium expiry sweep cron ──
+    _scheduler.add_job(
+        _sweep_expired_premium,
+        CronTrigger(hour=0, minute=0, timezone="UTC"),
+        id="premium_expiry_sweep",
         replace_existing=True,
     )
     _scheduler.start()
@@ -723,7 +756,20 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
 
 def _effective_premium(user: dict) -> bool:
     """Return True if user has full app access (paid subscriber or admin)."""
-    return user.get("is_admin", False) or user.get("is_premium", False)
+    if user.get("is_admin", False):
+        return True
+    if not user.get("is_premium", False):
+        return False
+    expires_raw = user.get("premium_expires_at")
+    if not expires_raw:
+        return False
+    try:
+        expires = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+        if not expires.tzinfo:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return expires > datetime.now(timezone.utc)
+    except Exception:
+        return False
 
 async def _maybe_mark_abandoned(user: dict) -> None:
     """Set abandoned=true on users who used the free scan but haven't subscribed
@@ -1356,7 +1402,12 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
 
     try:
         trial_days = 7 if data.plan == "annual" else 3
-        if current_user.get("referred_by") and not current_user.get("referral_rewarded", False):
+        use_referral_trial = (
+            bool(current_user.get("referred_by"))
+            and not current_user.get("referral_rewarded", False)
+            and not current_user.get("referral_trial_claimed", False)
+        )
+        if use_referral_trial:
             trial_days = 14
         session = stripe_lib.checkout.Session.create(
             mode="subscription",
@@ -1368,6 +1419,11 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
             customer_email=current_user.get("email", "") or None,
             metadata={"user_id": uid, "email": current_user.get("email", ""), "plan": data.plan, "referral_code": referral_code}
         )
+        if use_referral_trial:
+            await db.users.update_one(
+                {"_id": ObjectId(uid)},
+                {"$set": {"referral_trial_claimed": True}}
+            )
 
         # Annual price is £49.99; monthly is £12.99
         await db.payment_transactions.insert_one({
@@ -1423,8 +1479,9 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
                     is_trial = (payment_status == "no_payment_required")
                     if is_trial:
                         trial_days = 7 if plan == "annual" else 3
-                        trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1})
-                        if (trial_user_doc or {}).get("referred_by") and not (trial_user_doc or {}).get("referral_rewarded", False):
+                        trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1, "referral_trial_claimed": 1})
+                        _td = trial_user_doc or {}
+                        if _td.get("referred_by") and not _td.get("referral_rewarded", False) and not _td.get("referral_trial_claimed", False):
                             trial_days = 14
                         expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                     else:
@@ -1508,8 +1565,9 @@ async def stripe_webhook(request: Request):
                         # For paid: grant based on plan duration.
                         if is_trial:
                             trial_days = 7 if plan == "annual" else 3
-                            trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1})
-                            if (trial_user_doc or {}).get("referred_by") and not (trial_user_doc or {}).get("referral_rewarded", False):
+                            trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1, "referral_trial_claimed": 1})
+                            _td = trial_user_doc or {}
+                            if _td.get("referred_by") and not _td.get("referral_rewarded", False) and not _td.get("referral_trial_claimed", False):
                                 trial_days = 14
                             expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                         else:
@@ -1700,7 +1758,7 @@ async def create_portal_session(current_user: dict = Depends(get_current_user)):
     try:
         portal = stripe_lib.billing_portal.Session.create(
             customer=customer_id,
-            return_url="https://theflourishapp.netlify.app/"
+            return_url="https://theflourishapp.health"
         )
         return {"url": portal.url}
     except stripe_lib.error.StripeError as e:
