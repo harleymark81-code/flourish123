@@ -140,21 +140,30 @@ async def _send_reengagement_emails():
 
 # ── Trial ending cron task ────────────────────────────────────────────────────
 async def _send_trial_ending_emails():
-    """Cron: daily 09:00 UTC — notify trial users whose trial ends within the next 24 hours."""
+    """Cron: daily 09:00 UTC — notify trial users whose trial ends within the next 24 hours.
+
+    Uses premium_expires_at (set by checkout.session.completed) + is_trialing flag.
+    There is no separate trial_end field — the webhook writes one expiry timestamp
+    that doubles as the trial end date for trialing users."""
     logger_t = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
-    in_24h = now + timedelta(hours=24)
+    in_24h_iso = (now + timedelta(hours=24)).isoformat()
+    now_iso = now.isoformat()
     users = await db.users.find(
         {
             "is_premium": True,
-            "trial_end": {"$gte": now, "$lte": in_24h},
+            "is_trialing": True,
+            "premium_expires_at": {"$gte": now_iso, "$lte": in_24h_iso},
             "trial_ending_email_sent": {"$ne": True},
         }
     ).to_list(10000)
 
     sent = 0
     for user in users:
-        ok = await send_trial_ending_email(to=user["email"], name=user.get("name", ""))
+        email = user.get("email")
+        if not email:
+            continue
+        ok = await send_trial_ending_email(to=email, name=user.get("name", ""))
         if ok:
             await db.users.update_one(
                 {"_id": user["_id"]},
