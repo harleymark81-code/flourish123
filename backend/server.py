@@ -642,32 +642,9 @@ async def login(request: Request, data: LoginRequest):
     user["_id"] = user_id
     user.pop("password_hash", None)
 
-    # Update streak
-    today = datetime.now(timezone.utc).date().isoformat()
-    last_active = user.get("last_active_date")
-    streak = user.get("streak", 0)
-
-    if last_active:
-        from datetime import date
-        last_date = date.fromisoformat(last_active)
-        today_date = date.fromisoformat(today)
-        diff = (today_date - last_date).days
-        if diff == 1:
-            streak += 1
-        elif diff > 1:
-            streak = 1
-    else:
-        streak = 1
-
-    longest = max(streak, user.get("longest_streak", 0))
-
-    await db.users.update_one(
-        {"_id": ObjectId(user_id)},
-        {"$set": {"streak": streak, "longest_streak": longest, "last_active_date": today}}
-    )
-    user["streak"] = streak
-    user["longest_streak"] = longest
-    user["last_active_date"] = today
+    # Refresh streak from diary entries (the source of truth for daily logging).
+    # Login itself no longer advances the streak — only food logs do.
+    await _refresh_streak(user)
 
     token_version = user.get("token_version", 0)
     is_admin = bool(user.get("is_admin", False))
@@ -685,6 +662,7 @@ async def me(current_user: dict = Depends(get_current_user)):
         f"is_admin={current_user.get('is_admin')} "
         f"is_premium={current_user.get('is_premium')}"
     )
+    await _refresh_streak(current_user)
     return current_user
 
 @api_router.post("/auth/logout")
@@ -774,6 +752,77 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
         "has_used_free_scan": has_used_free_scan,
         "free_scan_available": not has_used_free_scan and not effective_premium,
     }
+
+async def _compute_streak_from_diary(uid: str) -> tuple[int, Optional[str]]:
+    """Derive consecutive-day streak from diary entries (the only source of truth
+    for "did the user log food on day X"). Returns (streak, last_entry_date).
+
+    Rules:
+      - Streak counts consecutive UTC calendar days ending at today (if logged
+        today) or yesterday (grace period — today not yet logged but not broken).
+      - Gap of 2+ calendar days between the last log and today resets to 0.
+    """
+    from datetime import date as _date
+    pipeline = [
+        {"$match": {"user_id": uid}},
+        {"$group": {"_id": "$date"}},
+        {"$sort": {"_id": -1}},
+        {"$limit": 400},
+    ]
+    docs = await db.diary.aggregate(pipeline).to_list(400)
+    dates = sorted({d["_id"] for d in docs if d.get("_id")}, reverse=True)
+    if not dates:
+        return 0, None
+
+    today = datetime.now(timezone.utc).date()
+    try:
+        last = _date.fromisoformat(dates[0])
+    except (ValueError, TypeError):
+        return 0, dates[0]
+
+    if (today - last).days > 1:
+        return 0, dates[0]
+
+    streak = 1
+    prev = last
+    for d_str in dates[1:]:
+        try:
+            d = _date.fromisoformat(d_str)
+        except (ValueError, TypeError):
+            break
+        gap = (prev - d).days
+        if gap == 0:
+            continue
+        if gap == 1:
+            streak += 1
+            prev = d
+        else:
+            break
+    return streak, dates[0]
+
+
+async def _refresh_streak(user: dict) -> dict:
+    """Recompute streak from diary, persist if changed, mutate user dict in place.
+    Safe to call on every authenticated request — single aggregate query."""
+    uid = user.get("id") or user.get("_id")
+    if not uid:
+        return user
+    streak, last_date = await _compute_streak_from_diary(str(uid))
+    longest = max(streak, int(user.get("longest_streak", 0) or 0))
+    cur_streak = int(user.get("streak", 0) or 0)
+    cur_longest = int(user.get("longest_streak", 0) or 0)
+    cur_last = user.get("last_active_date")
+    if streak != cur_streak or longest != cur_longest or (last_date and last_date != cur_last):
+        update = {"streak": streak, "longest_streak": longest}
+        if last_date:
+            update["last_active_date"] = last_date
+        await db.users.update_one({"_id": ObjectId(str(uid))}, {"$set": update})
+        user["streak"] = streak
+        user["longest_streak"] = longest
+        if last_date:
+            user["last_active_date"] = last_date
+    return user
+
 
 def _effective_premium(user: dict) -> bool:
     """Return True if user has full app access (paid subscriber or admin)."""
@@ -985,6 +1034,12 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
         except Exception as de:
             logger.warning(f"Diary auto-save error: {de}")
 
+        # ── Refresh streak now that today has a logged entry ───────────────────
+        try:
+            await _refresh_streak(current_user)
+        except Exception as se:
+            logger.warning(f"Streak refresh error: {se}")
+
         # ── Store in barcode cache ─────────────────────────────────────────────
         if data.barcode:
             try:
@@ -1116,11 +1171,19 @@ async def log_to_diary(data: DiaryLogRequest, current_user: dict = Depends(get_c
             upsert=True
         )
         doc = await db.diary.find_one({"scan_id": scan_id, "user_id": uid})
+        try:
+            await _refresh_streak(current_user)
+        except Exception as se:
+            logger.warning(f"Streak refresh error: {se}")
         return doc_to_dict(doc) if doc else entry
     else:
         result = await db.diary.insert_one(entry)
         entry["_id"] = str(result.inserted_id)
         entry["id"] = str(result.inserted_id)
+        try:
+            await _refresh_streak(current_user)
+        except Exception as se:
+            logger.warning(f"Streak refresh error: {se}")
         return entry
 
 @api_router.get("/diary")
