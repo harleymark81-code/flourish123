@@ -274,10 +274,26 @@ function SymptomBar({ label, value, max = 5 }) {
   );
 }
 
+// ── Premium upsell card ──────────────────────────────────────────────────────
+
+function PremiumUpsell({ feature }) {
+  return (
+    <div style={{ background: "linear-gradient(135deg, rgba(83,74,183,0.08), rgba(117,106,217,0.04))", border: "1px solid rgba(83,74,183,0.2)", borderRadius: 16, padding: 24, textAlign: "center", marginTop: 8 }}>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>🌸</div>
+      <p style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary)", margin: "0 0 6px", letterSpacing: "-0.01em" }}>{feature} is a Premium feature</p>
+      <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 16px", lineHeight: 1.5 }}>Unlock personalised analysis of your food and symptom data.</p>
+      <button onClick={() => window.location.reload()}
+        style={{ background: "#534AB7", color: "#fff", border: "none", borderRadius: 10, padding: "10px 22px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+        Upgrade to Premium
+      </button>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function InsightsScreen() {
-  const { user, getHeaders, API } = useAuth();
+  const { user, isPremium, getHeaders, API } = useAuth();
   const [badges, setBadges] = useState(null);
   const [report, setReport] = useState(null);
   const [patterns, setPatterns] = useState(null);
@@ -321,18 +337,23 @@ export default function InsightsScreen() {
       const res = await axios.get(`${API}/insights/weekly-report`, { headers: getHeaders(), withCredentials: true });
       setReport(res.data);
     } catch (e) {
+      if (e.response?.status === 403) { setReport({ premium_required: true }); return; }
       console.error("[Flourish] loadWeeklyReport:", e);
+      setReport({ error: true });
     } finally {
       setLoadingReport(false);
     }
   };
 
   const loadPatterns = async () => {
+    if (!isPremium) { setPatterns({ premium_required: true }); return; }
     try {
       const res = await axios.get(`${API}/diary/patterns`, { headers: getHeaders(), withCredentials: true });
       setPatterns(res.data);
     } catch (e) {
+      if (e.response?.status === 403) { setPatterns({ premium_required: true }); return; }
       console.error("[Flourish] loadPatterns:", e);
+      setPatterns({ error: true });
     }
   };
 
@@ -347,12 +368,15 @@ export default function InsightsScreen() {
   };
 
   const loadSymptomHistory = async () => {
+    if (!isPremium) { setSymptomHistory({ premium_required: true }); return; }
     setLoadingHistory(true);
     try {
       const res = await axios.get(`${API}/insights/symptom-history`, { headers: getHeaders(), withCredentials: true });
       setSymptomHistory(res.data);
     } catch (e) {
+      if (e.response?.status === 403) { setSymptomHistory({ premium_required: true }); return; }
       console.error("[Flourish] loadSymptomHistory:", e);
+      setSymptomHistory({ error: true });
     } finally {
       setLoadingHistory(false);
     }
@@ -463,7 +487,9 @@ export default function InsightsScreen() {
                 <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
                   <Loader size={24} color="#534AB7" style={{ animation: "spin 1s linear infinite" }} />
                 </div>
-              ) : report ? (
+              ) : report?.premium_required ? (
+                <PremiumUpsell feature="Weekly report" />
+              ) : report && !report.error ? (
                 <>
                   {/* Week at a glance */}
                   <div style={{ background: "linear-gradient(135deg, #534AB7, #756AD9)", borderRadius: 16, padding: 20, marginBottom: 16 }}>
@@ -518,6 +544,8 @@ export default function InsightsScreen() {
                     </div>
                   )}
 
+                  {symptomHistory?.premium_required && <PremiumUpsell feature="Symptom history" />}
+
                   {symptomHistory?.has_data && (
                     <>
                       <div style={{ marginTop: 8, marginBottom: 14 }}>
@@ -559,7 +587,7 @@ export default function InsightsScreen() {
                     </>
                   )}
 
-                  {symptomHistory && !symptomHistory.has_data && !loadingHistory && (
+                  {symptomHistory && !symptomHistory.has_data && !symptomHistory.premium_required && !symptomHistory.error && !loadingHistory && (
                     <div style={{ background: "var(--bg-card)", borderRadius: 14, padding: 20, marginTop: 8, border: "1px solid var(--border)", textAlign: "center" }}>
                       <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 6px" }}>No symptom history yet</p>
                       <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0, lineHeight: 1.5 }}>Start logging your daily symptoms to see trends here.</p>
@@ -581,6 +609,13 @@ export default function InsightsScreen() {
               {!patterns ? (
                 <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
                   <Loader size={24} color="#534AB7" style={{ animation: "spin 1s linear infinite" }} />
+                </div>
+              ) : patterns.premium_required ? (
+                <PremiumUpsell feature="Patterns" />
+              ) : patterns.error ? (
+                <div style={{ textAlign: "center", padding: 32, color: "var(--text-muted)" }}>
+                  <AlertCircle size={32} style={{ opacity: 0.4, marginBottom: 8 }} />
+                  <p style={{ fontSize: 14, margin: 0 }}>Could not load patterns. Try again later.</p>
                 </div>
               ) : (patterns.total_diary ?? 0) < 7 ? (
                 <PatternProgress count={patterns.total_diary || 0} needed={7} />
