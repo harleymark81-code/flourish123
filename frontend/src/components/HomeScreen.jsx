@@ -162,6 +162,8 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
   const [badgeQueue, setBadgeQueue] = useState([]);
   const [loading, setLoading] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const [lastFailedFood, setLastFailedFood] = useState("");
 
 
   const conditionsKey = (user?.conditions || []).join(",");
@@ -323,6 +325,7 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
       return;
     }
     setLoading(true);
+    setSearchError("");
     startLoading();
     try {
       const res = await axios.post(`${API}/food/rate`, {
@@ -332,10 +335,14 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
         product_image: productImage
       }, { headers: getHeaders(), withCredentials: true });
       setCurrentRating(res.data);
+      setLastFailedFood("");
       loadStats();
       checkBadges();
     } catch (e) {
       ph.apiError("/food/rate", e.message, e.response?.status);
+      const detail = e.response?.data?.detail;
+      setSearchError(typeof detail === "string" ? detail : "Couldn't analyse that food — please try again.");
+      setLastFailedFood(foodName);
     } finally {
       setLoading(false);
       stopLoading();
@@ -541,6 +548,24 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
               style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <p style={{ fontSize: 13, color: "#A32D2D", margin: 0, flex: 1 }}>{barcodeError}</p>
               <button onClick={() => setBarcodeError("")} style={{ background: "none", border: "none", color: "#A32D2D", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Food rating error banner (text search / quick pick / pending name) */}
+        <AnimatePresence>
+          {searchError && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              style={{ background: "rgba(163,45,45,0.08)", border: "1px solid rgba(163,45,45,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <p style={{ fontSize: 13, color: "#A32D2D", margin: 0, flex: 1 }}>{searchError}</p>
+              {lastFailedFood && (
+                <button onClick={() => { setSearchError(""); rateFood(lastFailedFood); }}
+                  style={{ background: "#A32D2D", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 700, padding: "5px 10px", cursor: "pointer", flexShrink: 0 }}>
+                  Try again
+                </button>
+              )}
+              <button onClick={() => setSearchError("")} style={{ background: "none", border: "none", color: "#A32D2D", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>×</button>
             </motion.div>
           )}
         </AnimatePresence>
