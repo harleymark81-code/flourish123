@@ -393,14 +393,23 @@ async def send_support_email(to: str, user_email: str, user_name: str, subject: 
 # -- 9. Re-engagement ---------------------------------------------------------
 
 async def send_reengagement_email(db) -> None:
-    """Send a one-time re-engagement email to users who abandoned 24+ hours ago."""
+    """Send a one-time re-engagement email to users who used their free scan
+    24+ hours ago and never subscribed.
+
+    Queries the underlying conditions directly — the `abandoned` flag set by
+    `_maybe_mark_abandoned` only fires on authenticated requests, so it would
+    silently miss users who never returned (the exact cohort we want to reach).
+    """
     log = logging.getLogger(__name__)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     users = await db.users.find(
         {
-            "abandoned": True,
-            "abandoned_at": {"$lte": cutoff.isoformat()},
+            "has_used_free_scan": True,
+            "free_scan_used_at": {"$lte": cutoff.isoformat()},
+            "is_premium": {"$ne": True},
+            "is_admin": {"$ne": True},
             "reengagement_email_sent": {"$ne": True},
+            "email": {"$exists": True, "$nin": [None, ""]},
         },
         {"_id": 1, "email": 1, "name": 1},
     ).to_list(10000)
