@@ -436,19 +436,44 @@ async def send_reengagement_email(db) -> None:
 # -- 11. Affiliate application admin notification ------------------------------
 
 async def send_affiliate_application_email(
-    to: str, applicant_name: str, applicant_email: str, affiliate_code: str
+    to: str,
+    applicant_name: str,
+    applicant_email: str,
+    affiliate_code: str,
+    social_handles: str = "",
+    audience_size: str = "",
+    condition_niche: str = "",
+    description: str = "",
 ) -> bool:
+    from html import escape as _esc
+
+    def _row(label: str, value: str) -> str:
+        return (
+            '<p style="margin:0 0 4px;font-size:12px;font-weight:700;color:' + TEXT_MUTED
+            + ';text-transform:uppercase;letter-spacing:0.8px;">' + _esc(label) + '</p>'
+            '<p style="margin:0 0 14px;font-size:15px;color:' + TEXT
+            + ';line-height:1.55;white-space:pre-wrap;">' + _esc(value or "—") + '</p>'
+        )
+
     body = (
         _h1("New affiliate application")
-        + _p(f"<strong>{applicant_name}</strong> ({applicant_email}) has submitted an affiliate application.")
+        + _p(f"<strong>{_esc(applicant_name)}</strong> has submitted an affiliate application.")
         + _highlight_box(
-            f'<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:{TEXT_MUTED};text-transform:uppercase;letter-spacing:0.8px;">Affiliate code</p>'
-            f'<p style="margin:0;font-size:18px;font-weight:800;color:{PURPLE};font-family:monospace;">{affiliate_code}</p>'
+            _row("Full name", applicant_name)
+            + _row("Email", applicant_email)
+            + _row("Social media handles", social_handles)
+            + _row("Audience size", audience_size)
+            + _row("Primary condition niche", condition_niche)
+            + _row("About the audience", description)
+            + '<p style="margin:0 0 4px;font-size:12px;font-weight:700;color:' + TEXT_MUTED
+            + ';text-transform:uppercase;letter-spacing:0.8px;">Affiliate code</p>'
+            + '<p style="margin:0;font-size:16px;font-weight:800;color:' + PURPLE
+            + ';font-family:monospace;">' + _esc(affiliate_code) + '</p>'
         )
         + _p("Review and approve or reject this application in the admin dashboard.", muted=True)
         + _btn("Open admin dashboard", FRONTEND_URL + "/admin")
     )
-    return await send_email(to, f"New affiliate application — {applicant_name}", _wrap(body))
+    return await send_email(to, "New Affiliate Application — Flourish", _wrap(body))
 
 
 # -- 12. Subscription cancelled ------------------------------------------------

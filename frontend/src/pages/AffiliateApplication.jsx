@@ -31,25 +31,6 @@ export default function AffiliateApplication() {
     setLoading(true);
     try {
       await axios.post(`${API}/affiliate/apply`, formData);
-
-      // EmailJS notification — fire and forget
-      try {
-        const emailjs = await import("@emailjs/browser");
-        await emailjs.default.send(
-          process.env.REACT_APP_EMAILJS_SERVICE_ID,
-          process.env.REACT_APP_EMAILJS_TEMPLATE_ID,
-          {
-            event_type: "New Affiliate Application",
-            user_email: formData.email,
-            details: `Name: ${formData.name} | Social: ${formData.social_handles} | Audience: ${formData.audience_size} | Niche: ${formData.condition_niche} | Bio: ${formData.description}`,
-            time: new Date().toLocaleString("en-GB")
-          },
-          { publicKey: process.env.REACT_APP_EMAILJS_PUBLIC_KEY }
-        );
-      } catch (emailErr) {
-        console.warn("EmailJS error:", emailErr);
-      }
-
       setSuccess(true);
     } catch (err) {
       if (err.response?.data?.detail) {
@@ -78,7 +59,7 @@ export default function AffiliateApplication() {
           <span style={{ fontSize: 40 }}>✓</span>
         </motion.div>
         <h2 style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Application received!</h2>
-        <p style={{ fontSize: 16, color: "var(--text-secondary)" }}>We'll be in touch within 48 hours.</p>
+        <p style={{ fontSize: 16, color: "var(--text-secondary)" }}>We'll review it and be in touch within 48 hours.</p>
         <button onClick={() => window.location.href = "/"} style={{ marginTop: 20, background: "#534AB7", color: "#fff", border: "none", borderRadius: 12, padding: "14px 28px", fontWeight: 600, cursor: "pointer" }}>
           Back to Flourish
         </button>

@@ -1969,10 +1969,14 @@ async def affiliate_apply(request: Request, data: AffiliateApplicationRequest):
     result = await db.affiliate_applications.insert_one(app_doc)
     asyncio.create_task(
         send_affiliate_application_email(
-            to="hello@theflourishapp.health",
+            to="theflourishfoodapp@gmail.com",
             applicant_name=data.name,
             applicant_email=data.email,
             affiliate_code=affiliate_code,
+            social_handles=data.social_handles,
+            audience_size=data.audience_size,
+            condition_niche=data.condition_niche,
+            description=data.description,
         )
     )
     return {"success": True, "id": str(result.inserted_id), "affiliate_code": affiliate_code}
