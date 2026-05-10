@@ -105,7 +105,11 @@ async def _send_weekly_reports():
     logger_w = logging.getLogger(__name__)
     seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
     users = await db.users.find(
-        {"email": {"$exists": True}, "role": {"$ne": "admin"}},
+        {
+            "email": {"$exists": True, "$nin": [None, ""]},
+            "role": {"$ne": "admin"},
+            "is_admin": {"$ne": True},
+        },
         {"_id": 1, "email": 1, "name": 1}
     ).to_list(10000)
 
