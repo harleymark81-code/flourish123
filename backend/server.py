@@ -1509,11 +1509,9 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
             customer_email=current_user.get("email", "") or None,
             metadata={"user_id": uid, "email": current_user.get("email", ""), "plan": data.plan, "referral_code": referral_code}
         )
-        if use_referral_trial:
-            await db.users.update_one(
-                {"_id": ObjectId(uid)},
-                {"$set": {"referral_trial_claimed": True}}
-            )
+        # Note: `referral_trial_claimed` is set in the webhook/polling upgrade
+        # path AFTER the trial actually starts. Setting it here prematurely
+        # would lock users out of the 14-day trial if they abandon checkout.
 
         # Annual price is £49.99; monthly is £12.99
         await db.payment_transactions.insert_one({
@@ -1542,10 +1540,11 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
     """Polling endpoint — reads payment status from Stripe and upgrades the user if confirmed paid."""
     stripe_lib.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
-    # Check if already processed by webhook
+    # Check if already processed by webhook (covers both real-paid and trialing
+    # — the webhook writes "trialing" for free trials, "paid" otherwise)
     transaction = await db.payment_transactions.find_one({"session_id": session_id})
-    if transaction and transaction.get("payment_status") == "paid":
-        return {"status": "complete", "payment_status": "paid", "is_success": True, "already_processed": True}
+    if transaction and transaction.get("payment_status") in ("paid", "trialing"):
+        return {"status": "complete", "payment_status": transaction.get("payment_status"), "is_success": True, "already_processed": True}
 
     try:
         session = stripe_lib.checkout.Session.retrieve(session_id)
@@ -1554,9 +1553,17 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
         is_success = (payment_status in ["paid", "no_payment_required"] and status == "complete") or payment_status == "paid"
 
         if is_success:
+            is_trial_session = (payment_status == "no_payment_required")
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
-                {"$set": {"status": "complete", "payment_status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}},
+                {"$set": {
+                    "status": "complete",
+                    # Match webhook semantics: trialing for free trials, paid otherwise.
+                    # The affiliate dashboard counts paid-only, so writing "paid" for a trial
+                    # would prematurely credit affiliates before the user actually pays.
+                    "payment_status": "trialing" if is_trial_session else "paid",
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }},
                 upsert=False
             )
             # Upgrade the user immediately — don't wait for the webhook (race condition: frontend
@@ -1566,27 +1573,32 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
                 user_id = transaction.get("user_id")
                 plan = transaction.get("plan", "monthly")
                 if user_id:
-                    is_trial = (payment_status == "no_payment_required")
+                    is_trial = is_trial_session
+                    extended_referral_trial = False
                     if is_trial:
                         trial_days = 7 if plan == "annual" else 3
                         trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1, "referral_trial_claimed": 1})
                         _td = trial_user_doc or {}
                         if _td.get("referred_by") and not _td.get("referral_rewarded", False) and not _td.get("referral_trial_claimed", False):
                             trial_days = 14
+                            extended_referral_trial = True
                         expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                     else:
                         expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
+                    user_set = {
+                        "is_premium": True,
+                        "premium_plan": plan,
+                        "premium_since": datetime.now(timezone.utc).isoformat(),
+                        "premium_expires_at": expires,
+                        "is_trialing": is_trial,
+                    }
+                    if extended_referral_trial:
+                        user_set["referral_trial_claimed"] = True
                     await db.users.update_one(
                         {"_id": ObjectId(user_id)},
-                        {"$set": {
-                            "is_premium": True,
-                            "premium_plan": plan,
-                            "premium_since": datetime.now(timezone.utc).isoformat(),
-                            "premium_expires_at": expires,
-                            "is_trialing": is_trial,
-                        }}
+                        {"$set": user_set}
                     )
-                    logger.info(f"User {user_id} upgraded to premium via status poll (plan: {plan})")
+                    logger.info(f"User {user_id} upgraded to premium via status poll (plan: {plan}, referral_trial: {extended_referral_trial})")
 
         return {"status": status, "payment_status": payment_status, "is_success": is_success}
     except Exception as e:
@@ -1688,26 +1700,31 @@ async def stripe_webhook(request: Request):
                     try:
                         # For trials: grant access for trial period only (Stripe revokes via webhook on expiry).
                         # For paid: grant based on plan duration.
+                        extended_referral_trial = False
                         if is_trial:
                             trial_days = 7 if plan == "annual" else 3
                             trial_user_doc = await db.users.find_one({"_id": ObjectId(user_id)}, {"referred_by": 1, "referral_rewarded": 1, "referral_trial_claimed": 1})
                             _td = trial_user_doc or {}
                             if _td.get("referred_by") and not _td.get("referral_rewarded", False) and not _td.get("referral_trial_claimed", False):
                                 trial_days = 14
+                                extended_referral_trial = True
                             expires = (datetime.now(timezone.utc) + timedelta(days=trial_days + 1)).isoformat()
                         else:
                             expires = (datetime.now(timezone.utc) + timedelta(days=30 if plan == "monthly" else 365)).isoformat()
+                        user_set = {
+                            "is_premium": True,
+                            "premium_plan": plan,
+                            "premium_since": datetime.now(timezone.utc).isoformat(),
+                            "premium_expires_at": expires,
+                            "is_trialing": is_trial,
+                        }
+                        if extended_referral_trial:
+                            user_set["referral_trial_claimed"] = True
                         await db.users.update_one(
                             {"_id": ObjectId(user_id)},
-                            {"$set": {
-                                "is_premium": True,
-                                "premium_plan": plan,
-                                "premium_since": datetime.now(timezone.utc).isoformat(),
-                                "premium_expires_at": expires,
-                                "is_trialing": is_trial,
-                            }}
+                            {"$set": user_set}
                         )
-                        logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan})")
+                        logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan}, referral_trial: {extended_referral_trial})")
                         # Subscription confirmed email
                         upgraded_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
                         if upgraded_user:
