@@ -2,7 +2,23 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { X } from "lucide-react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { ph } from "../lib/posthog";
+
+// Restrict zxing to product barcodes so it doesn't waste frames trying QR /
+// data-matrix / aztec on every video frame, and enable TRY_HARDER so it applies
+// extra image processing to extract codes from imperfect mobile camera frames.
+const SCAN_HINTS = new Map();
+SCAN_HINTS.set(DecodeHintType.POSSIBLE_FORMATS, [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.ITF,
+]);
+SCAN_HINTS.set(DecodeHintType.TRY_HARDER, true);
 
 export default function BarcodeScanner({ onResult, onClose }) {
   const videoRef = useRef(null);
@@ -18,7 +34,7 @@ export default function BarcodeScanner({ onResult, onClose }) {
     const start = async () => {
       if (cancelled || !videoRef.current) return;
       try {
-        const reader = new BrowserMultiFormatReader();
+        const reader = new BrowserMultiFormatReader(SCAN_HINTS);
 
         // Only specify facingMode — avoid width/height constraints that fail on
         // low-end Android and some iOS devices.
