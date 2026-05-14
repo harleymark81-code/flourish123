@@ -59,11 +59,19 @@ def _is_transient_error(exc):
     retry=retry_if_exception(_is_transient_error),
     reraise=True,
 )
-async def call_anthropic(system: str, user_msg: str) -> str:
+async def call_anthropic(system: str, user_msg: str, temperature: float | None = None) -> str:
     """Call Anthropic API directly using httpx, with retry on transient errors."""
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise ValueError("ANTHROPIC_API_KEY not set in environment")
+    payload = {
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 2048,
+        "system": system,
+        "messages": [{"role": "user", "content": user_msg}],
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -72,12 +80,7 @@ async def call_anthropic(system: str, user_msg: str) -> str:
                 "anthropic-version": "2023-06-01",
                 "content-type": "application/json",
             },
-            json={
-                "model": ANTHROPIC_MODEL,
-                "max_tokens": 2048,
-                "system": system,
-                "messages": [{"role": "user", "content": user_msg}],
-            },
+            json=payload,
         )
         if resp.status_code != 200:
             error_body = resp.text
@@ -939,9 +942,11 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
 
     system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness.
 
-You provide evidence-based food ratings that are DEEPLY PERSONALISED to the user's specific health profile. The user's full onboarding profile is provided below — conditions, severity, current symptoms, medications, primary goal, struggles, dietary style, and meals per day. You MUST use every relevant field when scoring.
+You rate how HEALTHY AND CLEAN a food is for the user. You do NOT penalise foods for not solving the user's condition on their own. The question you answer is: "Is this a good, healthy food for someone with this condition?" — not "does this food alone fix the condition?"
 
-Critical rule: two users with DIFFERENT conditions must NEVER receive the same overallScore for the same food. The overallScore, every dimension score, the verdict text, the forYourCondition explanation, the warnings, the positives, and the alternatives must all reflect that user's specific conditions and goals. A food that is excellent for someone with PCOS may be neutral or harmful for someone with thyroid disease — and your scoring must reflect that.
+You follow a STRICT DETERMINISTIC SCORING RUBRIC (provided in the user message). Do not improvise scores. Apply the rubric step by step. The same food with the same user profile must always produce the same overallScore.
+
+Condition-specific tailoring is preserved through targeted adjustments (a documented trigger food, or a food specifically beneficial to the user's condition) — NOT by globally lowering scores of clean whole foods that simply don't address the condition. A plain chicken breast for someone with PCOS should score the same as a plain chicken breast for someone with thyroid disease, because it is a clean whole food for both.
 
 You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
 
@@ -964,15 +969,71 @@ You MUST return ONLY valid JSON with no markdown, no preamble, no explanation �
 
 Food to rate: {data.food_name}
 {f'Ingredients: {data.ingredients}' if data.ingredients else ''}
-(Suggestion seed: {uuid.uuid4().hex[:8]} — always suggest fresh, varied alternatives not previously suggested)
 
-ALTERNATIVES RULE: Each alternative MUST genuinely score higher than {data.food_name} for this user's exact conditions ({', '.join(conditions) if conditions else 'general health'}). Do NOT suggest foods that are only generically healthy — each alternative must specifically address this user's primary condition(s) and goals. Each predictedScore must reflect what that food would actually score for this user's profile, and must exceed the overallScore of {data.food_name}.
+═══════════════════════════════════════════════════════════════════════
+STRICT SCORING RUBRIC — apply in order, do not improvise.
+═══════════════════════════════════════════════════════════════════════
+
+STEP 1 — Pick the BASE SCORE from this category table:
+  • Pure water, plain herbal tea (no additives): 95
+  • Whole, unprocessed, single-ingredient foods (plain chicken, eggs, fresh fish, plain rice, oats, fresh fruit, fresh vegetables, plain meat, legumes, plain nuts/seeds, plain Greek yogurt): 88
+  • Minimally processed whole foods with simple recognisable ingredients (hummus, cottage cheese, plain wholegrain bread, plain dairy milk, tofu, tempeh): 78
+  • Moderately processed packaged foods (sweetened cereals, granola bars, jarred sauces, deli meats): 55
+  • Heavily processed foods with refined sugars, refined flour, or industrial seed oils: 35
+  • Ultra-processed junk foods (sweets, soda, deep-fried items, products with 5+ additives): 15
+
+STEP 2 — Apply INGREDIENT ADJUSTMENTS to the base score (integers only):
+  • Added sugar (any form: sugar, syrup, dextrose, fructose, etc.): -5 per source, max -15
+  • Refined seed/vegetable oils (sunflower, soybean, canola, corn, palm, rapeseed): -6
+  • Artificial sweeteners (aspartame, sucralose, acesulfame K, saccharin): -8
+  • Artificial colours / flavours / preservatives / E-numbers / BHA / BHT / nitrites / MSG: -4 each, max -12
+  • Emulsifiers (carrageenan, polysorbate 80, soy lecithin from refined source): -3
+  • Refined white flour as primary ingredient: -5
+  • Trans fats / hydrogenated oils: -15
+  • High sodium (>800 mg / 100 g for solids, >400 mg / 100 ml for liquids): -4
+
+STEP 3 — Apply CONDITION-SPECIFIC ADJUSTMENTS — only for direct interactions:
+  • -10 to -25 if the food contains a documented TRIGGER for the user's specific condition (e.g., dairy for someone marked dairy-sensitive, gluten for coeliac, eggs for egg-allergy, soy for thyroid concerns where relevant, high-FODMAP foods for active IBS flare, alcohol for hormonal conditions).
+  • +3 to +7 if the food is specifically beneficial for the user's primary condition (e.g., flaxseed/cruciferous for PCOS oestrogen detox, fatty fish for autoimmune inflammation, bone broth for gut healing, brazil nuts for thyroid selenium).
+  • DO NOT dock a clean whole food just because it isn't a "superfood" for the condition. A plain chicken breast for PCOS still scores ≥85 — it is clean, it is not a trigger, end of story.
+
+STEP 4 — Apply FLOOR AND CEILING RULES:
+  • Pure, whole, unprocessed foods (water, plain chicken, eggs, spinach, salmon, plain rice, fresh fruit, fresh vegetables, fresh fish, fresh meat, plain nuts/seeds, legumes, plain oats) MUST score 80 or above UNLESS that exact food is a documented trigger for the user's condition (Step 3).
+  • Cap at 100, floor at 5.
+
+STEP 5 — DIMENSION SCORES (1-10, integers):
+  • naturalness: how unprocessed and close to whole-food the item is. Pure foods = 9-10. Ultra-processed = 1-3.
+  • hormonalImpact, inflammation, gutHealth: rate the food's general impact (not whether it cures the condition). Clean whole foods should land at 7-10 across these unless they are a known trigger for the user.
+
+STEP 6 — WARNINGS RULE (flags.warnings array):
+  • Only list warnings that are GENUINELY present in this specific food's ingredients or that are a documented trigger for the user's condition.
+  • Do NOT add generic reminders like "won't cure your condition", "isn't a substitute for medical treatment", "drink in moderation", "not a magic bullet".
+  • Pure water, plain whole foods: warnings array MUST be empty unless that exact food is a documented trigger for the user.
+
+STEP 7 — ALTERNATIVES RULE (alternatives array):
+  • If overallScore ≥ 60: return an EMPTY alternatives array [].
+  • If overallScore < 60: return exactly 3 alternatives. Each must specifically help the user's primary condition AND have a predictedScore strictly greater than this food's overallScore.
+
+STEP 8 — VERDICT (one sentence, calm measured language using "may support", "research suggests", etc.):
+  • 85-100: clean supportive choice
+  • 70-84: good food, minor considerations only
+  • 60-69: acceptable in moderation
+  • 40-59: heavily processed, prefer alternatives
+  • Below 40: poor choice for any user
+
+STEP 9 — forYourCondition (2-3 sentences):
+  • Explain HOW this food interacts with the user's specific conditions, severity, and symptoms.
+  • This is the place for condition-specific nuance. It does NOT drag the overallScore down — Steps 1-4 set the score; this field only explains the interaction.
+
+═══════════════════════════════════════════════════════════════════════
+
+DETERMINISM REQUIREMENT: Follow the rubric exactly. Do not improvise or vary scores. The same food with the same user profile must always yield the same overallScore.
 
 Return ONLY this exact JSON structure (no markdown, no extra text):
 {{
   "name": "{data.food_name}",
-  "overallScore": <integer 0-100>,
-  "verdict": "<one sentence using phrases like 'may support', 'research suggests', 'commonly associated with' — never absolute claims>",
+  "overallScore": <integer 0-100, computed via rubric Steps 1-4>,
+  "verdict": "<one sentence per Step 8>",
   "dimensions": {{
     "naturalness": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}},
     "hormonalImpact": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}},
@@ -980,21 +1041,17 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
     "gutHealth": {{"score": <integer 1-10>, "summary": "<2-3 sentences>", "why": "<1 concise sentence explaining the specific score given>"}}
   }},
   "flags": {{
-    "warnings": ["<short warning>", ...],
+    "warnings": ["<genuine concern only — per Step 6>", ...],
     "positives": ["<short positive>", ...],
     "tips": ["<short tip>", ...]
   }},
-  "forYourCondition": "<2-3 sentences deeply personalised to their specific conditions, severity, and current symptoms using calm measured language>",
-  "alternatives": [
-    {{"name": "<food name>", "predictedScore": <0-100>}},
-    {{"name": "<food name>", "predictedScore": <0-100>}},
-    {{"name": "<food name>", "predictedScore": <0-100>}}
-  ],
+  "forYourCondition": "<2-3 sentences per Step 9>",
+  "alternatives": [<empty array if overallScore >= 60, otherwise exactly 3 entries per Step 7>],
   "bodySystemsAffected": ["<from: Hormones, Gut, Immune, Thyroid, Energy>", ...]
 }}"""
 
     try:
-        response = await call_anthropic(system_msg, user_prompt)
+        response = await call_anthropic(system_msg, user_prompt, temperature=0)
 
         response_text = response.strip()
         if response_text.startswith("```"):
