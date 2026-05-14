@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, ChevronDown, MessageCircle, Mail, HelpCircle, ArrowLeft, ChevronUp, Send } from "lucide-react";
+import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Check, Trash2, AlertTriangle, ChevronDown, MessageCircle, Mail, HelpCircle, ArrowLeft, ChevronUp, Send, Smartphone } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
+import AddToHomeScreenModal, { isStandaloneInstalled } from "./AddToHomeScreenModal";
 
 
 
@@ -187,6 +188,8 @@ export default function ProfileScreen({ onEditProfile }) {
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState("");
   const [showSupport, setShowSupport] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
+  const alreadyInstalled = isStandaloneInstalled();
 
   useEffect(() => {
     loadStats();
@@ -425,6 +428,21 @@ export default function ProfileScreen({ onEditProfile }) {
           <ChevronRight size={16} color="#534AB7" />
         </motion.div>
 
+        {/* Add to Home Screen */}
+        {!alreadyInstalled && (
+          <motion.div whileTap={{ scale: 0.97 }} onClick={() => setShowInstall(true)}
+            style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Smartphone size={18} color="#534AB7" />
+              <div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Add to Home Screen</p>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Install Flourish for a full app experience</p>
+              </div>
+            </div>
+            <ChevronRight size={16} color="#534AB7" />
+          </motion.div>
+        )}
+
         {/* Help & Support */}
         <motion.div whileTap={{ scale: 0.97 }} onClick={() => setShowSupport(true)}
           style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -499,6 +517,11 @@ export default function ProfileScreen({ onEditProfile }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AddToHomeScreenModal
+        open={showInstall}
+        onClose={() => setShowInstall(false)}
+      />
     </div>
   );
 }

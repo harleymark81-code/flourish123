@@ -127,7 +127,14 @@ function AppContent() {
     // Persist referral code to localStorage so it survives tab closes,
     // page refreshes, and navigation before the visitor signs up.
     const ref = params.get("ref");
-    if (ref) localStorage.setItem("fl_ref", ref);
+    if (ref) {
+      localStorage.setItem("fl_ref", ref);
+      // Mirror the same code into the standalone affiliate ledger key. The
+      // backend looks up referred_by in the user-referral system and
+      // affiliate_code in the independent affiliates collection — only one
+      // (or neither) will match. Storing in both is harmless.
+      localStorage.setItem("affiliate_code", ref);
+    }
 
     if (params.get("upgraded") === "true") {
       setShowUpgradedModal(true);

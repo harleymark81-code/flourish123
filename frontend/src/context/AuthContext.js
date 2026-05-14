@@ -43,12 +43,17 @@ export function AuthProvider({ children }) {
     const ref = new URLSearchParams(window.location.search).get("ref")
       || localStorage.getItem("fl_ref")
       || "";
+    // Standalone affiliate code (independent of the user-referral system).
+    // Stored under its own localStorage key so the two systems can evolve
+    // independently; the backend treats each field independently.
+    const affiliateCode = localStorage.getItem("affiliate_code") || ref || "";
     // Build payload explicitly — no undefined values that could be mishandled
     const payload = {
       email: email.trim().toLowerCase(),
       password,
       name: name || "",
       ...(ref ? { referred_by: ref } : {}),
+      ...(affiliateCode ? { affiliate_code: affiliateCode } : {}),
     };
     const res = await axios.post(`${API}/auth/register`, payload, {
       headers: { "Content-Type": "application/json" },
@@ -57,6 +62,7 @@ export function AuthProvider({ children }) {
     // Persist token in localStorage so auth survives page refreshes on any browser/PWA.
     if (token) localStorage.setItem(TOKEN_KEY, token);
     localStorage.removeItem("fl_ref"); // consumed — clear so it doesn't affect future signups
+    localStorage.removeItem("affiliate_code"); // consumed — same reason
     setUser(u);
     identifyUser(u);
     ph.userSignedUp(u);
