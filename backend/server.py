@@ -232,6 +232,20 @@ def _verify_admin(request: Request):
     if auth != ADMIN_SESSION_TOKEN:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+def _verify_admin_secret(request: Request):
+    """Independent secret for the standalone affiliate admin endpoints.
+
+    Accepts the ADMIN_SECRET env var via either the X-Admin-Secret header or
+    the `secret` query string param. Falls back to ADMIN_SESSION_TOKEN if
+    ADMIN_SECRET is not configured, so existing admin tooling keeps working.
+    """
+    configured = os.environ.get("ADMIN_SECRET", "").strip() or ADMIN_SESSION_TOKEN
+    if not configured:
+        raise HTTPException(status_code=500, detail="ADMIN_SECRET not configured on server")
+    provided = request.headers.get("X-Admin-Secret", "") or request.query_params.get("secret", "")
+    if provided != configured:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 # ── Rate limiter ──────────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 
@@ -251,6 +265,10 @@ async def lifespan(app: FastAPI):
     # Referral indexes — used by webhook lookup and stats queries
     await db.users.create_index("referral_code", sparse=True)
     await db.payment_transactions.create_index("referral_code", sparse=True)
+    # Standalone affiliate ledger (independent of affiliate_applications/referrals)
+    await db.affiliates.create_index("code", unique=True)
+    await db.affiliates.create_index("email")
+    await db.users.create_index("affiliate_code", sparse=True)
 
     # ── Weekly report cron ──
     _scheduler.add_job(
@@ -463,6 +481,10 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     name: Optional[str] = Field(default="", max_length=100)
     referred_by: Optional[str] = Field(default=None, max_length=20)
+    # Affiliate code captured from ?ref= URL param at signup. Stored independently
+    # from referred_by — referred_by drives the existing user-referral reward flow,
+    # affiliate_code drives the standalone affiliate conversion ledger.
+    affiliate_code: Optional[str] = Field(default=None, max_length=40)
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -564,6 +586,18 @@ class AffiliateApplicationRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
+# ── Standalone affiliate ledger (separate from affiliate_applications & referrals)
+class AffiliateCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    email: EmailStr
+    code: str = Field(min_length=2, max_length=40)
+    notes: str = Field(default="", max_length=1000)
+
+class AffiliateConvertRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=40)
+    plan: str = Field(pattern="^(monthly|annual)$")
+    amount_gbp: float = Field(ge=0)
+
 # ── AUTH ROUTES ───────────────────────────────────────────────────────────────
 @api_router.post("/auth/register")
 @limiter.limit("10/minute")
@@ -596,6 +630,7 @@ async def register(request: Request, data: RegisterRequest):
         "referred_by": data.referred_by or None,
         "referral_rewarded": False,
         "referral_count": 0,
+        "affiliate_code": (data.affiliate_code or "").strip().upper() or None,
         "streak": 0,
         "longest_streak": 0,
         "last_active_date": None,
@@ -1800,12 +1835,25 @@ async def stripe_webhook(request: Request):
             if customer_id:
                 uid = await _find_uid_by_customer(customer_id)
                 if uid:
-                    trial_user = await db.users.find_one({"_id": ObjectId(uid)}, {"email": 1, "name": 1})
+                    # Dedup against the daily trial-ending cron. The cron uses the same
+                    # flag — whichever path fires first sends the email; the other is a
+                    # no-op. Prevents users from receiving the same email twice.
+                    trial_user = await db.users.find_one(
+                        {"_id": ObjectId(uid), "trial_ending_email_sent": {"$ne": True}},
+                        {"email": 1, "name": 1},
+                    )
                     if trial_user:
-                        asyncio.create_task(send_trial_ending_email(
-                            to=trial_user.get("email", ""),
-                            name=trial_user.get("name", ""),
-                        ))
+                        async def _send_and_flag():
+                            ok = await send_trial_ending_email(
+                                to=trial_user.get("email", ""),
+                                name=trial_user.get("name", ""),
+                            )
+                            if ok:
+                                await db.users.update_one(
+                                    {"_id": ObjectId(uid)},
+                                    {"$set": {"trial_ending_email_sent": True}},
+                                )
+                        asyncio.create_task(_send_and_flag())
 
         elif event_type == "customer.subscription.updated":
             sub_status = data_obj.get("status", "")
@@ -1916,6 +1964,33 @@ async def stripe_webhook(request: Request):
                                     logger.info(f"Referral cap reached for {referrer.get('email')} — count incremented, no reward")
                     except Exception as e:
                         logger.error(f"Referral reward failed (non-blocking): {e}")
+
+                    # ── Standalone affiliate conversion ledger ──────────────────
+                    # Records the conversion against the affiliates collection.
+                    # Independent of the referral system — no reward fires here.
+                    # Idempotent: each user can only ever count as one conversion
+                    # per affiliate (enforced by the $ne user_id filter).
+                    try:
+                        aff_user = await db.users.find_one(
+                            {"_id": ObjectId(uid)},
+                            {"affiliate_code": 1, "email": 1},
+                        )
+                        aff_code = (aff_user or {}).get("affiliate_code") or None
+                        if aff_code:
+                            amount_gbp = 49.99 if plan == "annual" else 12.99
+                            res = await db.affiliates.update_one(
+                                {"code": aff_code, "conversions.user_id": {"$ne": uid}},
+                                {"$push": {"conversions": {
+                                    "user_id": uid,
+                                    "converted_at": datetime.now(timezone.utc).isoformat(),
+                                    "plan": plan,
+                                    "amount_gbp": amount_gbp,
+                                }}},
+                            )
+                            if res.modified_count:
+                                logger.info(f"Affiliate conversion recorded: code={aff_code} user={uid} plan={plan} £{amount_gbp}")
+                    except Exception as e:
+                        logger.error(f"Affiliate conversion record failed (non-blocking): {e}")
 
         elif event_type == "invoice.payment_failed":
             customer_id = data_obj.get("customer")
@@ -2104,6 +2179,79 @@ async def track_affiliate_click(request: Request):
             {"$inc": {"clicks": 1}}
         )
     return {"success": True}
+
+# ── Standalone affiliate ledger ──────────────────────────────────────────────
+# Independent of /affiliate/apply (application form) and the user referral
+# system. Used to track admin-managed affiliates and their paid conversions.
+# No rewards fire — purely a ledger.
+
+@api_router.post("/admin/affiliates/create")
+async def admin_create_affiliate(request: Request, data: AffiliateCreateRequest):
+    _verify_admin_secret(request)
+    code = data.code.strip().upper()
+    if await db.affiliates.find_one({"code": code}):
+        raise HTTPException(status_code=400, detail="Affiliate code already exists")
+    doc = {
+        "affiliate_id": str(uuid.uuid4()),
+        "name": data.name.strip(),
+        "email": data.email.lower().strip(),
+        "code": code,
+        "conversions": [],
+        "notes": data.notes.strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.affiliates.insert_one(doc)
+    doc.pop("_id", None)
+    return {"success": True, "affiliate": doc}
+
+@api_router.post("/affiliate/convert")
+async def affiliate_convert(request: Request, data: AffiliateConvertRequest):
+    """Manually record a conversion against an affiliate. The webhook records
+    conversions automatically on invoice.payment_succeeded; this endpoint is for
+    backfills and tooling. Protected by ADMIN_SECRET. No reward fires."""
+    _verify_admin_secret(request)
+    user = await db.users.find_one({"_id": safe_object_id(data.user_id)}, {"affiliate_code": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    code = (user.get("affiliate_code") or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="User has no affiliate_code on their account")
+    res = await db.affiliates.update_one(
+        {"code": code, "conversions.user_id": {"$ne": data.user_id}},
+        {"$push": {"conversions": {
+            "user_id": data.user_id,
+            "converted_at": datetime.now(timezone.utc).isoformat(),
+            "plan": data.plan,
+            "amount_gbp": data.amount_gbp,
+        }}},
+    )
+    if not res.matched_count:
+        raise HTTPException(status_code=404, detail=f"No affiliate found with code {code}")
+    return {"success": True, "code": code, "already_recorded": res.modified_count == 0}
+
+@api_router.get("/admin/affiliate-conversions")
+async def admin_affiliate_conversions(request: Request):
+    """List every affiliate in the ledger with their conversion count and total
+    revenue driven. Protected by ADMIN_SECRET (separate from the X-Admin-Token
+    used by /admin/affiliates which serves the older application table)."""
+    _verify_admin_secret(request)
+    rows = await db.affiliates.find().sort("created_at", -1).to_list(1000)
+    out = []
+    for r in rows:
+        conversions = r.get("conversions", []) or []
+        total_revenue = round(sum(float(c.get("amount_gbp", 0) or 0) for c in conversions), 2)
+        out.append({
+            "affiliate_id": r.get("affiliate_id", ""),
+            "name": r.get("name", ""),
+            "email": r.get("email", ""),
+            "code": r.get("code", ""),
+            "notes": r.get("notes", ""),
+            "created_at": r.get("created_at", ""),
+            "conversion_count": len(conversions),
+            "total_revenue_gbp": total_revenue,
+            "conversions": conversions,
+        })
+    return {"affiliates": out, "count": len(out)}
 
 # ── ADMIN ─────────────────────────────────────────────────────────────────────
 @api_router.post("/admin/login")
