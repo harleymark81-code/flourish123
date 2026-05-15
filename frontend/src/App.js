@@ -19,8 +19,8 @@ import MyFoodsScreen from "./components/MyFoodsScreen";
 import ResetPassword from "./components/ResetPassword";
 import FreeScanScreen from "./components/FreeScanScreen";
 import ReturningUserWelcome from "./components/ReturningUserWelcome";
-import PWAInstallBanner from "./components/PWAInstallBanner";
-import InstallInstructionsModal from "./components/InstallInstructionsModal";
+import InstallPromptManager, { EV_SCAN_COMPLETED, EV_SUBSCRIBED } from "./components/InstallPromptManager";
+import PostInstallWelcome from "./components/PostInstallWelcome";
 import axios from "axios";
 import "./App.css";
 import "./index.css";
@@ -118,7 +118,6 @@ function AppContent() {
   const [showPaymentPending, setShowPaymentPending] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
-  const [installModalOpen, setInstallModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -141,6 +140,9 @@ function AppContent() {
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2000);
       setTimeout(() => setShowUpgradedModal(false), 5000);
+      // Install prompt: subscribing is a high-intent moment. The manager
+      // handles dedupe + installed-state guards.
+      window.dispatchEvent(new CustomEvent(EV_SUBSCRIBED));
       // Send EmailJS notification
       if (user?.email) {
         sendPremiumEmail(user.email, "upgraded");
@@ -203,7 +205,12 @@ function AppContent() {
   if (!user.onboarding_completed) return <Onboarding onComplete={() => refreshUser()} />;
   // Free scan step — user must experience Flourish before the paywall
   if (!user.has_used_free_scan && !isPremium) {
-    return <FreeScanScreen onComplete={() => refreshUser()} />;
+    return <FreeScanScreen onComplete={() => {
+      // First-scan trigger for install prompt — fires before refresh so the
+      // user lingers on the success state momentarily.
+      window.dispatchEvent(new CustomEvent(EV_SCAN_COMPLETED));
+      refreshUser();
+    }} />;
   }
   // Returning user — show welcome-back screen once per session before the paywall.
   // sessionStorage so it re-shows on next visit until they subscribe.
@@ -328,10 +335,9 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      {/* PWA Install Banner */}
-      <PWAInstallBanner />
-      {/* iOS/Android Install Instructions Modal */}
-      <InstallInstructionsModal isOpen={installModalOpen} onClose={() => setInstallModalOpen(false)} />
+      {/* Install flow — manager handles all auto-triggers + dedupe */}
+      <InstallPromptManager />
+      <PostInstallWelcome />
     </div>
   );
 }

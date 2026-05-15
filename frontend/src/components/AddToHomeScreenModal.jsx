@@ -1,176 +1,407 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Share2, Plus, Home, MoreVertical, Download, Smartphone, Check, X } from "lucide-react";
+import {
+  Share2, Plus, Home, MoreVertical, Download, Smartphone, Check, X,
+  ArrowDown, ChevronRight, Compass,
+} from "lucide-react";
+import {
+  detectPlatform,
+  isStandaloneInstalled,
+  isInstalled,
+  useDeferredInstallPrompt,
+  tryNativeInstall,
+  snoozeReminder,
+} from "../lib/pwaInstall";
 
-// ─── Shared install state ──────────────────────────────────────────────────────
-// The `beforeinstallprompt` event only fires once per page load on Android
-// Chrome. We capture it at module load so the banner AND the Profile tab can
-// both trigger the native install prompt from a single shared reference.
-
-let deferredPrompt = null;
-const promptSubscribers = new Set();
-
-function notifyPromptChanged() {
-  promptSubscribers.forEach((fn) => fn(!!deferredPrompt));
-}
-
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    notifyPromptChanged();
-  });
-  window.addEventListener("appinstalled", () => {
-    deferredPrompt = null;
-    notifyPromptChanged();
-  });
-}
-
-export function isStandaloneInstalled() {
-  if (typeof window === "undefined") return false;
-  if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return true;
-  if (window.navigator && window.navigator.standalone === true) return true;
-  return false;
-}
-
-export function detectPlatform() {
-  if (typeof navigator === "undefined") return "other";
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
-  if (isIOS) return "ios";
-  if (/Android/i.test(ua)) return "android";
-  return "other";
-}
-
-export function useDeferredInstallPrompt() {
-  const [available, setAvailable] = useState(!!deferredPrompt);
-  useEffect(() => {
-    promptSubscribers.add(setAvailable);
-    return () => promptSubscribers.delete(setAvailable);
-  }, []);
-  return available;
-}
-
-// Returns true if the user accepted the native install prompt.
-async function tryNativeInstall() {
-  if (!deferredPrompt) return false;
-  try {
-    await deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    const accepted = choice?.outcome === "accepted";
-    deferredPrompt = null;
-    notifyPromptChanged();
-    return accepted;
-  } catch {
-    return false;
-  }
-}
-
-// ─── Modal ─────────────────────────────────────────────────────────────────────
+// Re-export for any older imports that still pull from here.
+export { isStandaloneInstalled, detectPlatform };
 
 const PRI = "#534AB7";
 const PRI_TINT = "rgba(83,74,183,0.10)";
 
-function StepIcon({ children }) {
+// ─── iOS step-by-step content ────────────────────────────────────────────────
+const IOS_STEPS = [
+  {
+    title: "Tap the share button below",
+    body: "It's in Safari's toolbar at the bottom of your screen — a square with an arrow pointing up.",
+    icon: <Share2 size={48} color={PRI} />,
+    arrow: true,
+  },
+  {
+    title: "Scroll down and tap “Add to Home Screen”",
+    body: "It's about halfway down the share sheet.",
+    icon: <Plus size={48} color={PRI} />,
+    arrow: false,
+  },
+  {
+    title: "Tap “Add” in the top right",
+    body: "Flourish will appear on your home screen, ready to launch like a native app.",
+    icon: <Home size={48} color={PRI} />,
+    arrow: false,
+  },
+  {
+    title: "Done — open Flourish from your home screen",
+    body: "Close Safari and tap the new Flourish icon. You're all set.",
+    icon: null, // tick animation rendered inline
+    arrow: false,
+    isFinal: true,
+  },
+];
+
+// ─── Android manual-flow content (for non-Chrome Android) ────────────────────
+const ANDROID_MANUAL_STEPS = [
+  {
+    title: "Open the Chrome menu",
+    body: "Tap the three dots in the top-right corner of your browser.",
+    icon: <MoreVertical size={48} color={PRI} />,
+  },
+  {
+    title: "Pick “Install app”",
+    body: "On some devices this reads as “Add to Home screen”.",
+    icon: <Download size={48} color={PRI} />,
+  },
+  {
+    title: "Confirm “Install”",
+    body: "Flourish will land on your home screen.",
+    icon: <Home size={48} color={PRI} />,
+  },
+];
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function StepIllustration({ icon, arrow }) {
   return (
     <div style={{
-      width: 44, height: 44, borderRadius: 12, background: PRI_TINT,
-      display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+      width: "100%",
+      minHeight: 160,
+      borderRadius: 20,
+      background: PRI_TINT,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 16,
+      padding: 24,
+      marginBottom: 20,
     }}>
-      {children}
+      <div style={{
+        width: 84, height: 84, borderRadius: 22,
+        background: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 8px 28px rgba(83,74,183,0.18)",
+      }}>
+        {icon}
+      </div>
+      {arrow && (
+        <motion.div
+          animate={{ y: [0, 10, 0] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+          style={{ color: PRI, display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <ArrowDown size={28} />
+        </motion.div>
+      )}
     </div>
   );
 }
 
-function Step({ n, icon, title, body }) {
+function FinalTick() {
   return (
-    <li style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "12px 0" }}>
-      <StepIcon>{icon}</StepIcon>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{
-          margin: 0,
-          fontSize: 11,
-          fontWeight: 800,
-          color: PRI,
-          textTransform: "uppercase",
-          letterSpacing: 0.7,
-          marginBottom: 2,
-        }}>Step {n}</p>
-        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--text-primary, #1A1A24)", lineHeight: 1.35 }}>{title}</p>
-        {body && <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-secondary, #6B6A7C)", lineHeight: 1.5 }}>{body}</p>}
-      </div>
-    </li>
+    <div style={{
+      width: "100%",
+      minHeight: 160,
+      borderRadius: 20,
+      background: "rgba(99,153,34,0.10)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 20,
+    }}>
+      <motion.div
+        initial={{ scale: 0 }}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 280, damping: 16 }}
+        style={{
+          width: 84, height: 84, borderRadius: "50%",
+          background: "#639922",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 8px 28px rgba(99,153,34,0.32)",
+        }}
+      >
+        <Check size={44} color="#fff" strokeWidth={3} />
+      </motion.div>
+    </div>
   );
 }
 
-const IOS_STEPS = [
-  {
-    n: 1,
-    icon: <Share2 size={22} color={PRI} />,
-    title: "Tap the Share button",
-    body: "It sits in the toolbar at the bottom of Safari — the square with an arrow pointing up.",
-  },
-  {
-    n: 2,
-    icon: <Plus size={22} color={PRI} />,
-    title: "Choose “Add to Home Screen”",
-    body: "Scroll down the share sheet until you see it.",
-  },
-  {
-    n: 3,
-    icon: <Home size={22} color={PRI} />,
-    title: "Tap “Add”",
-    body: "Flourish will appear on your home screen, ready to launch like a native app.",
-  },
-];
+function ProgressDots({ total, current }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "center", gap: 8, marginBottom: 18 }}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div key={i} style={{
+          width: i === current ? 28 : 8,
+          height: 8,
+          borderRadius: 4,
+          background: i <= current ? PRI : "rgba(83,74,183,0.18)",
+          transition: "all 240ms ease",
+        }} />
+      ))}
+    </div>
+  );
+}
 
-const ANDROID_MANUAL_STEPS = [
-  {
-    n: 1,
-    icon: <MoreVertical size={22} color={PRI} />,
-    title: "Open the Chrome menu",
-    body: "Tap the three dots in the top-right corner of Chrome.",
-  },
-  {
-    n: 2,
-    icon: <Download size={22} color={PRI} />,
-    title: "Pick “Install app”",
-    body: "On some devices this reads as “Add to Home screen”.",
-  },
-  {
-    n: 3,
-    icon: <Home size={22} color={PRI} />,
-    title: "Confirm “Install”",
-    body: "Flourish will land on your home screen.",
-  },
-];
+// ─── Branches ────────────────────────────────────────────────────────────────
 
-export default function AddToHomeScreenModal({ open, onClose, onDismissForever }) {
-  const platform = detectPlatform();
-  const nativeAvailable = useDeferredInstallPrompt();
+function IOSOtherBrowserBranch({ onRemindLater, onClose }) {
+  const url = typeof window !== "undefined" ? window.location.href : "";
+  const copyUrl = async () => {
+    try { await navigator.clipboard.writeText(url); } catch {}
+  };
+  return (
+    <>
+      <div style={{
+        width: "100%",
+        minHeight: 160,
+        borderRadius: 20,
+        background: PRI_TINT,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 20,
+      }}>
+        <div style={{
+          width: 84, height: 84, borderRadius: 22, background: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 8px 28px rgba(83,74,183,0.18)",
+        }}>
+          <Compass size={48} color={PRI} />
+        </div>
+      </div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: "0 0 8px", textAlign: "center", letterSpacing: "-0.01em" }}>
+        Open this page in Safari
+      </h2>
+      <p style={{ fontSize: 14, color: "var(--text-secondary, #6B6A7C)", margin: "0 0 16px", textAlign: "center", lineHeight: 1.55 }}>
+        On iPhone, Flourish can only be added to your home screen from <strong>Safari</strong> — other browsers don't support it.
+      </p>
+      <button
+        onClick={copyUrl}
+        style={{
+          width: "100%", background: PRI, color: "#fff", border: "none",
+          borderRadius: 14, padding: "14px", fontWeight: 700, fontSize: 15,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginBottom: 10,
+        }}
+      >
+        Copy link
+      </button>
+      <p style={{ fontSize: 12, color: "var(--text-muted, #9A98AC)", margin: "0 0 18px", textAlign: "center", lineHeight: 1.5 }}>
+        Then open Safari, paste the link, and follow the install steps.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        <button
+          onClick={onRemindLater}
+          style={{ background: "none", border: "none", color: "var(--text-secondary, #6B6A7C)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+        >
+          Remind me later
+        </button>
+        <button
+          onClick={onClose}
+          style={{ background: "none", border: "none", color: "var(--text-muted, #9A98AC)", fontSize: 12, cursor: "pointer", padding: 4 }}
+        >
+          Close
+        </button>
+      </div>
+    </>
+  );
+}
+
+function AndroidNativeBranch({ onClose, onRemindLater }) {
   const [installing, setInstalling] = useState(false);
   const [installed, setInstalled] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setInstalling(false);
-      setInstalled(false);
-    }
-  }, [open]);
-
-  const handleNativeInstall = async () => {
+  const handle = async () => {
     setInstalling(true);
     const ok = await tryNativeInstall();
     setInstalling(false);
     if (ok) {
       setInstalled(true);
-      setTimeout(() => onClose?.(), 1200);
+      setTimeout(onClose, 1200);
     }
   };
 
-  // If we somehow opened the modal on an unsupported platform, render a generic
-  // "open this on your phone" message rather than nothing — easier to debug.
-  const isUnsupported = platform === "other";
+  if (installed) {
+    return (
+      <>
+        <FinalTick />
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: "0 0 8px", textAlign: "center" }}>
+          Installed
+        </h2>
+        <p style={{ fontSize: 14, color: "var(--text-secondary, #6B6A7C)", margin: 0, textAlign: "center" }}>
+          Open Flourish from your home screen.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14,
+        background: PRI_TINT,
+        padding: 18, borderRadius: 16, marginBottom: 18,
+      }}>
+        <div style={{
+          width: 56, height: 56, borderRadius: 14, background: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 16px rgba(83,74,183,0.15)",
+          fontSize: 30,
+        }}>
+          🌸
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: 0 }}>Flourish</p>
+          <p style={{ fontSize: 13, color: "var(--text-secondary, #6B6A7C)", margin: "2px 0 0" }}>
+            Works offline · Faster than browser
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={handle}
+        disabled={installing}
+        style={{
+          width: "100%", background: PRI, color: "#fff", border: "none",
+          borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16,
+          cursor: installing ? "default" : "pointer", opacity: installing ? 0.7 : 1,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginBottom: 14,
+        }}
+      >
+        <Download size={18} /> {installing ? "Installing…" : "Install Flourish"}
+      </button>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <button
+          onClick={onRemindLater}
+          style={{ background: "none", border: "none", color: "var(--text-secondary, #6B6A7C)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+        >
+          Remind me later
+        </button>
+      </div>
+    </>
+  );
+}
+
+function StepByStepBranch({ steps, onClose, onRemindLater, dismissible }) {
+  const [i, setI] = useState(0);
+  const step = steps[i];
+  const isLast = i === steps.length - 1;
+
+  return (
+    <>
+      <ProgressDots total={steps.length} current={i} />
+      <motion.div
+        key={i}
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        {step.isFinal ? <FinalTick /> : <StepIllustration icon={step.icon} arrow={!!step.arrow} />}
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: "0 0 8px", textAlign: "center", letterSpacing: "-0.01em" }}>
+          {step.title}
+        </h2>
+        <p style={{ fontSize: 14, color: "var(--text-secondary, #6B6A7C)", margin: "0 0 22px", textAlign: "center", lineHeight: 1.55 }}>
+          {step.body}
+        </p>
+      </motion.div>
+
+      <button
+        onClick={() => (isLast ? onClose() : setI(i + 1))}
+        style={{
+          width: "100%", background: PRI, color: "#fff", border: "none",
+          borderRadius: 14, padding: "16px", fontWeight: 800, fontSize: 16,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        {isLast ? "Got it" : "Next"} {!isLast && <ChevronRight size={18} />}
+      </button>
+
+      {!isLast && dismissible && (
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button
+            onClick={onRemindLater}
+            style={{ background: "none", border: "none", color: "var(--text-secondary, #6B6A7C)", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+          >
+            Remind me later
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Main modal ──────────────────────────────────────────────────────────────
+
+export default function AddToHomeScreenModal({ open, onClose, onDismissForever }) {
+  const platform = detectPlatform();
+  const nativeAvailable = useDeferredInstallPrompt();
+
+  // Don't render if the user already installed — belt-and-braces; the manager
+  // also gates this, but Profile can open the modal directly.
+  if (open && isInstalled()) {
+    // Schedule close on next tick so the parent can react.
+    setTimeout(onClose, 0);
+    return null;
+  }
+
+  const handleRemindLater = () => {
+    snoozeReminder();
+    onClose?.();
+  };
+
+  // iOS Safari & Android-manual: the spec says step-by-step "cannot be
+  // dismissed by tapping outside (too important)". Android one-tap and
+  // iOS-other are short single-screens — they can dismiss freely.
+  const isStepByStep =
+    platform === "ios-safari" ||
+    (platform === "android" && !nativeAvailable);
+
+  const canDismissBackdrop = !isStepByStep;
+
+  let bodyContent;
+  if (platform === "ios-safari") {
+    bodyContent = (
+      <StepByStepBranch
+        steps={IOS_STEPS}
+        onClose={onClose}
+        onRemindLater={handleRemindLater}
+        dismissible
+      />
+    );
+  } else if (platform === "ios-other") {
+    bodyContent = <IOSOtherBrowserBranch onRemindLater={handleRemindLater} onClose={onClose} />;
+  } else if (platform === "android" && nativeAvailable) {
+    bodyContent = <AndroidNativeBranch onClose={onClose} onRemindLater={handleRemindLater} />;
+  } else if (platform === "android") {
+    bodyContent = (
+      <StepByStepBranch
+        steps={ANDROID_MANUAL_STEPS}
+        onClose={onClose}
+        onRemindLater={handleRemindLater}
+        dismissible
+      />
+    );
+  } else {
+    // desktop / unknown
+    bodyContent = (
+      <div style={{
+        padding: 18, background: PRI_TINT,
+        border: `1px solid ${PRI_TINT}`, borderRadius: 14, marginBottom: 12,
+      }}>
+        <p style={{ margin: 0, fontSize: 14, color: "var(--text-secondary, #6B6A7C)", lineHeight: 1.55 }}>
+          Open <strong>theflourishapp.health</strong> on your phone's browser to add Flourish to your home screen.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -179,10 +410,10 @@ export default function AddToHomeScreenModal({ open, onClose, onDismissForever }
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={() => canDismissBackdrop && onClose?.()}
           style={{
             position: "fixed", inset: 0, zIndex: 9700,
-            background: "rgba(15,12,40,0.6)",
+            background: "rgba(15,12,40,0.65)",
             display: "flex", alignItems: "flex-end", justifyContent: "center",
           }}>
           <motion.div
@@ -194,98 +425,38 @@ export default function AddToHomeScreenModal({ open, onClose, onDismissForever }
               background: "var(--bg-card, #fff)",
               borderRadius: "24px 24px 0 0",
               maxWidth: 480, width: "100%",
-              padding: "10px 22px calc(28px + env(safe-area-inset-bottom, 0px))",
+              padding: "10px 22px calc(24px + env(safe-area-inset-bottom, 0px))",
               boxShadow: "0 -8px 32px rgba(0,0,0,0.25)",
-              maxHeight: "92vh", overflowY: "auto",
+              maxHeight: "94vh", overflowY: "auto",
             }}>
-            <div style={{ width: 44, height: 4, background: "rgba(0,0,0,0.15)", borderRadius: 4, margin: "8px auto 18px" }} />
+            <div style={{ width: 44, height: 4, background: "rgba(0,0,0,0.15)", borderRadius: 4, margin: "8px auto 16px" }} />
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            {/* Header — close button only on dismissible branches */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 10, background: PRI_TINT, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Smartphone size={18} color={PRI} />
                 </div>
-                <p style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: 0, letterSpacing: "-0.01em" }}>Install Flourish</p>
+                <p style={{ fontSize: 16, fontWeight: 800, color: "var(--text-primary, #1A1A24)", margin: 0, letterSpacing: "-0.01em" }}>Install Flourish</p>
               </div>
-              <button onClick={onClose} aria-label="Close"
-                style={{ background: "transparent", border: "none", padding: 8, cursor: "pointer", color: "var(--text-secondary, #6B6A7C)", lineHeight: 0 }}>
-                <X size={20} />
-              </button>
-            </div>
-            <p style={{ fontSize: 13, color: "var(--text-secondary, #6B6A7C)", margin: "4px 0 18px", lineHeight: 1.5 }}>
-              {platform === "ios"
-                ? "Add Flourish to your iPhone home screen — it’ll open like a native app, full-screen, with offline support."
-                : platform === "android"
-                  ? "Add Flourish to your Android home screen — opens like a native app, full-screen."
-                  : "Open this page on your phone’s browser to install Flourish on your home screen."}
-            </p>
-
-            {installed ? (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 12, padding: 16,
-                background: "rgba(99,153,34,0.10)", border: "1px solid rgba(99,153,34,0.3)",
-                borderRadius: 14, marginBottom: 8,
-              }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: "#639922", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Check size={18} color="#fff" />
-                </div>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "var(--text-primary, #1A1A24)" }}>Installed — find Flourish on your home screen.</p>
-              </div>
-            ) : isUnsupported ? (
-              <div style={{
-                padding: 16, background: "rgba(83,74,183,0.06)",
-                border: "1px solid rgba(83,74,183,0.18)", borderRadius: 14, marginBottom: 8,
-              }}>
-                <p style={{ margin: 0, fontSize: 13, color: "var(--text-secondary, #6B6A7C)", lineHeight: 1.55 }}>
-                  Visit <strong>theflourishapp.health</strong> from your phone’s browser to add Flourish to your home screen.
-                </p>
-              </div>
-            ) : platform === "android" && nativeAvailable ? (
-              <>
-                <p style={{ margin: "0 0 14px", fontSize: 14, color: "var(--text-primary, #1A1A24)", lineHeight: 1.5 }}>
-                  Your browser supports one-tap install — no manual steps required.
-                </p>
-                <button
-                  onClick={handleNativeInstall}
-                  disabled={installing}
-                  style={{
-                    width: "100%", background: PRI, color: "#fff", border: "none",
-                    borderRadius: 14, padding: "16px", fontWeight: 700, fontSize: 15,
-                    cursor: installing ? "default" : "pointer", opacity: installing ? 0.7 : 1,
-                    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  }}>
-                  <Download size={18} /> {installing ? "Installing…" : "Install Flourish"}
+              {canDismissBackdrop && (
+                <button onClick={onClose} aria-label="Close"
+                  style={{ background: "transparent", border: "none", padding: 8, cursor: "pointer", color: "var(--text-secondary, #6B6A7C)", lineHeight: 0 }}>
+                  <X size={20} />
                 </button>
-              </>
-            ) : (
-              <>
-                <ol style={{ listStyle: "none", padding: 0, margin: "0 0 12px" }}>
-                  {(platform === "ios" ? IOS_STEPS : ANDROID_MANUAL_STEPS).map((s) => (
-                    <Step key={s.n} {...s} />
-                  ))}
-                </ol>
-                {platform === "ios" && (
-                  <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--text-muted, #9A98AC)", lineHeight: 1.5 }}>
-                    Note: this only works inside Safari — other iOS browsers can’t add to the home screen.
-                  </p>
-                )}
-              </>
-            )}
+              )}
+            </div>
 
-            {!installed && !isUnsupported && (
-              <div style={{ display: "flex", gap: 10, marginTop: 22 }}>
-                {onDismissForever && (
-                  <button onClick={onDismissForever}
-                    style={{ flex: 1, background: "transparent", color: "var(--text-secondary, #6B6A7C)", border: "1px solid var(--border, #E0DEF2)", borderRadius: 12, padding: "12px", fontWeight: 600, fontSize: 14, cursor: "pointer" }}>
-                    Don’t show again
-                  </button>
-                )}
-                <button onClick={onClose}
-                  style={{ flex: 1, background: onDismissForever ? PRI : "var(--bg-card, #fff)",
-                           color: onDismissForever ? "#fff" : "var(--text-primary, #1A1A24)",
-                           border: onDismissForever ? "none" : "1px solid var(--border, #E0DEF2)",
-                           borderRadius: 12, padding: "12px", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                  Got it
+            {bodyContent}
+
+            {/* Legacy "Don't show again" path — only the old Profile-tab call
+                site passes onDismissForever. New triggers use snoozeReminder
+                via the "Remind me later" link. */}
+            {onDismissForever && !isStepByStep && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 8 }}>
+                <button onClick={onDismissForever}
+                  style={{ background: "none", border: "none", color: "var(--text-muted, #9A98AC)", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+                  Don't show again
                 </button>
               </div>
             )}

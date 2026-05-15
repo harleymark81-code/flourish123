@@ -4,7 +4,8 @@ import { User, Crown, Edit2, Share2, Flame, LogOut, ChevronRight, Star, Copy, Ch
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
-import AddToHomeScreenModal, { isStandaloneInstalled } from "./AddToHomeScreenModal";
+import AddToHomeScreenModal from "./AddToHomeScreenModal";
+import { isInstalled } from "../lib/pwaInstall";
 
 
 
@@ -189,7 +190,7 @@ export default function ProfileScreen({ onEditProfile }) {
   const [portalError, setPortalError] = useState("");
   const [showSupport, setShowSupport] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
-  const alreadyInstalled = isStandaloneInstalled();
+  const alreadyInstalled = isInstalled();
 
   useEffect(() => {
     loadStats();
@@ -428,15 +429,39 @@ export default function ProfileScreen({ onEditProfile }) {
           <ChevronRight size={16} color="#534AB7" />
         </motion.div>
 
-        {/* Add to Home Screen */}
-        {!alreadyInstalled && (
+        {/* Add to Home Screen — or installed indicator */}
+        {alreadyInstalled ? (
+          <div style={{
+            background: "rgba(99,153,34,0.08)",
+            borderRadius: 16,
+            padding: 16,
+            border: "1px solid rgba(99,153,34,0.25)",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            marginBottom: 12,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: "#639922",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <Check size={18} color="#fff" strokeWidth={3} />
+            </div>
+            <div>
+              <p style={{ fontSize: 15, fontWeight: 700, color: "#639922", margin: "0 0 2px" }}>App installed ✓</p>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Flourish is on your home screen</p>
+            </div>
+          </div>
+        ) : (
           <motion.div whileTap={{ scale: 0.97 }} onClick={() => setShowInstall(true)}
             style={{ background: "var(--bg-card)", borderRadius: 16, padding: 16, border: "1px solid var(--border)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <Smartphone size={18} color="#534AB7" />
               <div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Add to Home Screen</p>
-                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Install Flourish for a full app experience</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text-primary)", margin: "0 0 2px" }}>Install App</p>
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>Add Flourish to your home screen</p>
               </div>
             </div>
             <ChevronRight size={16} color="#534AB7" />
