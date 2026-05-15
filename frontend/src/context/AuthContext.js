@@ -25,16 +25,28 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    axios.get(`${API}/auth/me`, { headers })
+    // Hard timeout so a hung network request can't trap the PWA on the
+    // loading spinner forever — after 8s we drop to unauthenticated and let
+    // the user reach the auth screen.
+    const source = axios.CancelToken.source();
+    const timeout = setTimeout(() => source.cancel("auth_init_timeout"), 8000);
+
+    axios.get(`${API}/auth/me`, { headers, cancelToken: source.token })
       .then(res => {
         setUser(res.data);
         identifyUser(res.data);
       })
-      .catch(() => {
+      .catch(err => {
+        if (axios.isCancel(err)) {
+          console.warn("[Flourish] auth init timed out — falling back to logged-out");
+        }
         localStorage.removeItem(TOKEN_KEY);
         setUser(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        clearTimeout(timeout);
+        setLoading(false);
+      });
   }, []);
 
   const register = async (email, password, name) => {
