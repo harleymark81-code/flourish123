@@ -2258,7 +2258,19 @@ async def admin_affiliate_conversions(request: Request):
 @limiter.limit("3/minute")
 async def admin_login(request: Request, data: AdminLoginRequest):
     admin_password = os.environ.get("ADMIN_PASSWORD")
-    if not admin_password or data.password != admin_password:
+    # TEMP DEBUG — remove after diagnosing the login mismatch. Logs lengths only,
+    # never the actual password values, so we can spot whitespace/encoding skew.
+    logger.info(
+        "[admin_login DEBUG] submitted_len=%s env_len=%s exact_match=%s stripped_match=%s",
+        len(data.password),
+        len(admin_password) if admin_password else None,
+        bool(admin_password) and data.password == admin_password,
+        bool(admin_password) and data.password.strip() == admin_password.strip(),
+    )
+    # Compare with surrounding whitespace stripped from both sides — env vars set
+    # via dashboards (e.g. Railway) commonly pick up a trailing newline/space on
+    # paste. This normalises the comparison only; the stored value is untouched.
+    if not admin_password or data.password.strip() != admin_password.strip():
         raise HTTPException(status_code=401, detail="Invalid admin password")
     if not ADMIN_SESSION_TOKEN:
         raise HTTPException(status_code=500, detail="ADMIN_SESSION_TOKEN not configured on server — set it in Railway env vars")
