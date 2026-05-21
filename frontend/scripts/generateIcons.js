@@ -1,11 +1,15 @@
 /**
  * Flourish PWA icon generator — "F with bloom" mark.
  *
- * Renders the icon at every required size using the `canvas` package and writes
- * PNGs to ../public/icons/. Everything is laid out as a fraction of the canvas
- * size `S`, so a single design scales cleanly from 512 down to 16.
+ * Manual one-off — `canvas` is intentionally NOT a project dependency so
+ * Netlify never has to build it. The generated PNGs in public/icons/ are
+ * committed directly to the repo.
  *
- * Run:  node scripts/generate-icons.js
+ * Run once locally: npm install canvas --no-save && node scripts/generateIcons.js
+ *
+ * Renders the icon at every required size and writes PNGs to ../public/icons/.
+ * Everything is laid out as a fraction of the canvas size `S`, so a single
+ * design scales cleanly from 512 down to 16.
  */
 const fs = require("fs");
 const path = require("path");
