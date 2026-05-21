@@ -322,7 +322,7 @@ export default function ProfileScreen({ onEditProfile }) {
                 )}
               </div>
             </div>
-            <motion.button whileTap={{ scale: 0.9 }} onClick={onEditProfile}
+            <motion.button whileTap={{ scale: 0.9 }} onClick={onEditProfile} aria-label="Edit My Personalisation" title="Edit My Personalisation"
               style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 10, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
               <Edit2 size={16} color="#fff" />
             </motion.button>

@@ -10,6 +10,7 @@ import Onboarding from "./components/Onboarding";
 import HomeScreen from "./components/HomeScreen";
 import FoodDiary from "./components/FoodDiary";
 import ProfileScreen from "./components/ProfileScreen";
+import EditProfile from "./components/EditProfile";
 import Paywall from "./components/Paywall";
 import AdminDashboard from "./pages/AdminDashboard";
 import AffiliateApplication from "./pages/AffiliateApplication";
@@ -224,7 +225,7 @@ function AppContent() {
   if (!isPremium) {
     return <Paywall hardGate onClose={() => {}} user={user} entryPoint="hard_gate" />;
   }
-  if (editingProfile) return <Onboarding onComplete={() => setEditingProfile(false)} />;
+  if (editingProfile) return <EditProfile onClose={() => setEditingProfile(false)} />;
 
   return (
     <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: "var(--bg-app)", position: "relative" }}>
