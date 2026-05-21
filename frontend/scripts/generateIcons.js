@@ -11,22 +11,25 @@
  * Everything is laid out as a fraction of the canvas size `S`, so a single
  * design scales cleanly from 512 down to 16.
  *
- * Note on the bloom centre: the app's "cherry blossom" is the 🌸 emoji the
- * login screen renders (AuthScreen.jsx). node-canvas can't reliably draw a
- * colour emoji, so per spec we approximate it with 5 soft pink ellipse petals
- * around a white-pink centre — no outlines, no shadows.
+ * Bloom centre: the cherry blossom is the 🌸 emoji the login screen renders
+ * (AuthScreen.jsx). node-canvas can't draw a colour emoji glyph directly, so
+ * we composite the 🌸 emoji artwork (Noto Emoji, Apache-2.0) vendored at
+ * scripts/assets/cherry-blossom.png. If that asset is missing we fall back to
+ * a drawn 5-petal pink blossom.
  */
 const fs = require("fs");
 const path = require("path");
-const { createCanvas } = require("canvas");
+const { createCanvas, loadImage } = require("canvas");
 
 const SIZES = [512, 192, 180, 152, 120, 76, 32, 16];
 const OUT_DIR = path.join(__dirname, "..", "public", "icons");
+const BLOSSOM_IMG = path.join(__dirname, "assets", "cherry-blossom.png");
 
 const BG = "#130820";          // deep dark purple background
 const F_COLOR = "#ffffff";     // bold white F
 const PETALS = ["#6d28d9", "#7c3aed", "#9333ea", "#a855f7", "#c084fc"];
 const PETAL_COUNT = 7;
+// Fallback only — drawn blossom if the emoji asset can't be loaded.
 const BLOSSOM_PETAL = "#fbcfe8";   // soft pink
 const BLOSSOM_CENTER = "#fce7f3";  // white-pink
 const BLOSSOM_PETAL_COUNT = 5;
@@ -56,7 +59,7 @@ function drawPetal(ctx, cx, cy, angle, pc, rx, ry, color) {
   ctx.restore();
 }
 
-function drawIcon(S) {
+function drawIcon(S, blossomImg) {
   const canvas = createCanvas(S, S);
   const ctx = canvas.getContext("2d");
 
@@ -106,27 +109,44 @@ function drawIcon(S) {
   }
   ctx.globalAlpha = 1;
 
-  // ── Cherry blossom centre (~13% of icon) — 5 pink petals + white-pink core
-  const blossomR = 0.065 * S;  // half of ~13% diameter
-  const bpc = blossomR * 0.34;
-  const bpry = blossomR * 0.62;
-  const bprx = blossomR * 0.40;
-  for (let i = 0; i < BLOSSOM_PETAL_COUNT; i++) {
-    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / BLOSSOM_PETAL_COUNT;
-    drawPetal(ctx, bloomX, bloomY, angle, bpc, bprx, bpry, BLOSSOM_PETAL);
+  // ── Cherry blossom centre (~13% of icon) ─────────────────────────────────
+  const blossomSize = 0.14 * S;
+  if (blossomImg) {
+    ctx.drawImage(
+      blossomImg,
+      bloomX - blossomSize / 2,
+      bloomY - blossomSize / 2,
+      blossomSize,
+      blossomSize
+    );
+  } else {
+    // Fallback: drawn 5-petal pink blossom — no outlines, no shadows.
+    const r = blossomSize / 2;
+    for (let i = 0; i < BLOSSOM_PETAL_COUNT; i++) {
+      const angle = -Math.PI / 2 + (i * 2 * Math.PI) / BLOSSOM_PETAL_COUNT;
+      drawPetal(ctx, bloomX, bloomY, angle, r * 0.34, r * 0.40, r * 0.62, BLOSSOM_PETAL);
+    }
+    ctx.beginPath();
+    ctx.arc(bloomX, bloomY, r * 0.42, 0, Math.PI * 2);
+    ctx.fillStyle = BLOSSOM_CENTER;
+    ctx.fill();
   }
-  ctx.beginPath();
-  ctx.arc(bloomX, bloomY, blossomR * 0.42, 0, Math.PI * 2);
-  ctx.fillStyle = BLOSSOM_CENTER;
-  ctx.fill();
 
   return canvas;
 }
 
-function main() {
+async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  let blossomImg = null;
+  try {
+    blossomImg = await loadImage(BLOSSOM_IMG);
+  } catch (e) {
+    console.warn(`[generateIcons] cherry-blossom asset not loaded (${e.message}) — using drawn fallback.`);
+  }
+
   for (const S of SIZES) {
-    const canvas = drawIcon(S);
+    const canvas = drawIcon(S, blossomImg);
     const file = path.join(OUT_DIR, `icon-${S}.png`);
     fs.writeFileSync(file, canvas.toBuffer("image/png"));
     console.log(`wrote ${path.relative(path.join(__dirname, ".."), file)} (${S}x${S})`);
