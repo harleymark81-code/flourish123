@@ -119,3 +119,54 @@ anonymous fair-use.
 
 ---
 
+## Section 4 — Paywall + Onboarding
+
+**Scope:** 16 onboarding screens (15 with progress bar), free-scan gate, hard paywall,
+and every possible bypass to a free/unpaid AI scan.
+
+**Functions audited:**
+Frontend — `AppContent` routing gate (App.js:110), `StripeReturn` (App.js:53),
+`Onboarding` (Onboarding.jsx:113), screen 12 loader effect (Onboarding.jsx:181-207),
+screen 16 final save (Onboarding.jsx:641-668), `FreeScanScreen.handleScan`
+(FreeScanScreen.jsx:103), `Paywall` (Paywall.jsx:90), `Paywall.handleSubscribe`
+(Paywall.jsx:117), `Paywall.handleClose` hardGate guard (Paywall.jsx:152),
+`ReturningUserWelcome` (ReturningUserWelcome.jsx:24).
+Backend — `update_profile` (server.py:729), `get_daily_tip` (server.py:1164),
+`get_meal_plan` gate (server.py:1190), `log_to_diary` gate (server.py:1230),
+`get_diary` today-only-for-free (server.py:1272-1281), `get_patterns` gate
+(server.py:1316), `log_symptoms` gate (server.py:1421),
+`get_streak_reward` ungated info (server.py:1522).
+
+**Onboarding screens:** 1 landing → 2 age → 3 intro → 4 conditions → 5 mirror →
+6 duration → 7 challenges → 8 reflection → 9 goal → 10 diet → 11 meals →
+12 loader (fire-and-forget save) → 13 theme → 14 education → 15 science →
+16 features + FINAL SAVE with `onboarding_completed:true`.
+
+**Bypass check summary:**
+- Writers to `has_used_free_scan`: only `register` (init False, server.py:625) and
+  `rate_food` (sets True, server.py:1151). `update_profile` whitelist does NOT
+  include the flag. **No bypass path.**
+- Writers to `is_premium=True`: `stripe_webhook` (4 handlers), `_process_referral_reward`
+  in webhook, `grant_admin` (via `is_admin`), and startup owner-grant. **No
+  client-facing bypass path.**
+- Endpoints that call `call_anthropic`: `/food/rate` (gated), `/food/meal-plan`
+  (gated), `/diary/patterns` (gated), `/food/daily-tip` **(NOT gated)** — see 4.C.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 4.A | 🟠 | Onboarding screen 12 fires `updateProfile` fire-and-forget; loader advances after fixed 3000ms regardless of save. On flaky networks users may lose all onboarding answers if both screen 12 and screen 16 saves fail. | `frontend/src/components/Onboarding.jsx:190-200` and `:641-668` | Persist form state to localStorage on each advance. On screen 16 failure, keep user on screen 16 with retry; do NOT call `onComplete()`. |
+| 4.B | 🟠 | Screen 16 handler always calls `onComplete()` even when save times out (10s Promise.race) or errors. `refreshUser` re-reads DB; if `onboarding_completed:false`, App.js re-routes to Onboarding — but component re-mount wipes React state → user restarts at screen 1. | `frontend/src/components/Onboarding.jsx:641-668` | Only call `onComplete()` on save success. Distinguish timeout from success. |
+| 4.C | 🟠 | `/food/daily-tip` has NO `_effective_premium` gate and NO `has_used_free_scan` gate. Any authed user (incl. paywalled) can grind 1 Anthropic call per UTC day via direct API. Frontend never calls it for non-premium (behind hardGate), so exploitable only via API. Blast radius: 1 tip/user/day. | `backend/server.py:1164-1185` | Add `if not _effective_premium(current_user): raise HTTPException(403, ...)`. Or gate on `has_used_free_scan` if it's meant to be a free perk. |
+| 4.D | 🟢 | `ReturningUserWelcome` gated by `sessionStorage["welcome_back_seen"]` — re-shows on every new tab/session until subscription. Intentional per code comment. | `frontend/src/App.js:218-223` | None. |
+| 4.E | 🟢 | Paywall renders logout button even in hardGate. User can log out → log in as another account (fresh gate). Intentional and correct. | `frontend/src/components/Paywall.jsx:366-371` | None. |
+| 4.F | 🟢 | Progress bar formula `((screen - 2) / 14) * 100` reaches 100% at screen 16. Screen 1 (landing) has no progress bar. Correct. | `frontend/src/components/Onboarding.jsx:146` | None. |
+| 4.G | 🟢 | `updateProfile(...).catch(e => console.error(...))` at Onboarding.jsx:200 is silent to ops. No PostHog signal on save failure. | `frontend/src/components/Onboarding.jsx:200` | Also fire `ph.apiError("/profile", ...)` on catch. |
+| 4.H | 🟢 | Screen 1 "Already have an account? Log in" calls `logout()` on an authed user who hasn't finished onboarding. Correct behavior; adds log noise. | `frontend/src/components/Onboarding.jsx:322-325` | None. |
+| 4.I | 🟢 | `update_profile` PUT whitelist excludes `has_used_free_scan`, `is_premium`, `premium_expires_at`, `is_admin`, `token_version`, `referral_code`, `email`, `password_hash`. Confirmed no bypass via `/profile`. | `backend/server.py:729-755` | None. |
+| 4.J | ⏸ (revisit §5) | Immediate-unlock at `checkout.session.completed` (server.py:1665) + polling loop in StripeReturn (App.js:69-89). Race window covered by 8×2s poll + payment_pending fallback. Deep audit deferred to §5. | `backend/server.py:1665`, `frontend/src/App.js:69-89` | Re-examine in §5. |
+
+---
+
+
