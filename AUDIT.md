@@ -169,4 +169,59 @@ Backend — `update_profile` (server.py:729), `get_daily_tip` (server.py:1164),
 
 ---
 
+## Section 5 — Stripe
+
+**Scope:** checkout session creation, immediate-unlock path, webhook signature +
+trailing-slash URL risk, all 6 webhook handlers, cancel, failed payment, portal.
+Resolves the two parked items: §2.C `_effective_premium` edge case and §4.J race.
+
+**Functions audited:**
+Backend — `create_checkout` (server.py:1542), `get_payment_status` (server.py:1615),
+`_find_uid_by_customer` (server.py:1684), `stripe_webhook` (server.py:1714),
+handlers `checkout.session.completed` (server.py:1740-1814),
+`customer.subscription.trial_will_end` (server.py:1816-1840),
+`customer.subscription.updated` (server.py:1842-1865),
+`customer.subscription.deleted` (server.py:1867-1883),
+`invoice.payment_succeeded` + referral + affiliate ledger (server.py:1885-1977),
+`invoice.payment_failed` (server.py:1979-1992),
+`create_portal_session` (server.py:2002), `_sweep_expired_premium` cron
+(server.py:183), `_effective_premium` (server.py:869), `_ALLOWED_ORIGINS`
+(server.py:568), `FastAPI(...)` instantiation (server.py:349).
+Frontend — `Paywall.handleSubscribe` (Paywall.jsx:117), `StripeReturn` polling
+(App.js:53-108), portal button (ProfileScreen.jsx:252, SubscriptionScreen.jsx:30).
+
+**Webhook route:** `/api/webhook/stripe` (api_router prefix `/api`).
+FastAPI `redirect_slashes` NOT set → defaults to True.
+
+**§2.C resolution:** No live code path can create `is_premium=True + premium_expires_at=None`.
+All 6 writers of `is_premium=True` co-set `premium_expires_at`; the daily
+`_sweep_expired_premium` cron (00:00 UTC) self-heals any anomalous state by
+setting `is_premium=False`. Downgrade §2.C to 🟢 with a WARN log recommendation
+(see 5.L).
+
+**§4.J resolution:** The immediate-unlock path in `get_payment_status` (server.py:1614)
+is race-safe — both webhook and poll write identical `$set` operations. Idempotency
+guaranteed. Only gap: poll path skips confirmation email + PostHog track (see 5.A).
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 5.A | 🟡 | `get_payment_status` immediate-unlock does NOT send `send_subscription_confirmed_email` and does NOT fire PostHog `subscription_started`. If webhook fails silently (misconfigured secret, trailing-slash URL, network), user is upgraded but receives no confirmation and no conversion tracking is recorded. | `backend/server.py:1614-1682` (missing email + PostHog) vs `1804-1812` (webhook path) | Add the same email + PostHog calls after the immediate-unlock, guarded by an idempotency flag on `payment_transactions` (e.g., `confirmation_email_sent:True`). Both paths race for the flag. |
+| 5.B | 🔴 | **Trailing-slash webhook URL risk.** `FastAPI(...)` at server.py:349 has default `redirect_slashes=True`. If Stripe dashboard URL is `https://…/api/webhook/stripe/` (trailing slash), FastAPI returns 307; Stripe does NOT follow 3xx on webhook delivery — every future webhook fails silently. Users pay but never upgrade (except via poll path when they still have `?success=true` in URL). | `backend/server.py:349` + Stripe dashboard config | (1) `app = FastAPI(title="Flourish API", lifespan=lifespan, redirect_slashes=False)` so trailing-slash POST returns 404 (visible in logs). (2) **Manually verify Stripe dashboard URL ends in `stripe` with no slash.** Do NOT ship until both confirmed. |
+| 5.C | 🟠 | `customer.subscription.updated` treats `past_due` identically to `canceled`/`unpaid` — immediately revokes premium. Stripe treats `past_due` as "we're retrying"; user still has an active card that may succeed. Users hit paywall mid-dunning, restored on next `invoice.payment_succeeded`. | `backend/server.py:1860-1865` | Move `past_due` OUT of the immediate-revoke branch. Let `invoice.payment_failed` (after 3 attempts) be the authoritative revoke signal. Keep `canceled` and `unpaid` immediate. |
+| 5.D | 🟠 | `customer.subscription.deleted` sends `send_cancellation_email` with no idempotency guard. Stripe re-delivery → duplicate cancellation emails. | `backend/server.py:1877-1883` | Add `cancellation_email_sent:True` flag on user doc; check-and-set before sending. Same pattern as `trial_ending_email_sent`. |
+| 5.E | 🟠 | `invoice.payment_succeeded` sets `premium_expires_at = now + 30/365 days`, NOT `existing_expiry + …`. No invoice-id idempotency — Stripe re-delivery of same invoice event grants extra 30 days each time. | `backend/server.py:1898-1902` | Store `stripe_invoice_id` on `payment_transactions` and check-and-set before extending. Or use `period_end` from the invoice object as source of truth for expiry. |
+| 5.F | 🟢 | Referral reward + affiliate ledger inside `invoice.payment_succeeded` correctly guard double-processing via atomic conditions (`referral_rewarded: {$ne:True}` and `conversions.user_id: {$ne: uid}`). Note only. | `backend/server.py:1904-1977` | None. |
+| 5.G | 🟠 | `invoice.payment_failed` sends NO email at attempts 1 or 2. Silent premium revoke at attempt 3+, user hits paywall next login with no warning. Churn multiplier. | `backend/server.py:1979-1992` | At attempt 1, send "payment issue — please update your card" email with portal link. Guard via `payment_failed_email_sent_for_invoice` (invoice_id key). |
+| 5.H | 🟢 | `create_portal_session` return URL hardcoded to `https://theflourishapp.health` — no www. User on `www.…` gets bounced cross-origin after portal → cookie loss on some browsers. | `backend/server.py:2022` | Derive return URL from Origin header, or accept both www and non-www. |
+| 5.I | 🟢 | `create_checkout` writes `payment_transactions` after Stripe session created. If DB insert fails, webhook's `update_one` with default `upsert=False` silently no-ops on the missing row — user still upgraded via `users.update_one`, but transaction row missing → admin dashboard misses it. | `backend/server.py:1592-1606` (insert) and `:1771-1774` (webhook update) | Add `upsert=True` on the webhook's `payment_transactions.update_one` to self-heal. |
+| 5.J | 🟢 | `get_payment_status` accepts any `session_id` from any authed user. Upgrade target is `transaction.user_id`, not requester — no self-escalation. Can trigger another user's activation (arguably a feature). Session IDs unguessable. Info leak only. | `backend/server.py:1614-1682` | Optional: `if transaction["user_id"] != uid: raise 403`. |
+| 5.K | 🟢 | `Paywall.handleSubscribe` posts `origin_url: window.location.origin`. Always correct for the deployment; verified safe against `_ALLOWED_ORIGINS`. | `frontend/src/components/Paywall.jsx:128` | None. |
+| 5.L | 🟢 (**resolves §2.C**) | `_effective_premium` silent False when `premium_expires_at` missing/malformed is defensive; no live code path can produce the state (all writers co-set both fields; daily sweep self-heals). Downgrade §2.C from 🟡 to 🟢. | `backend/server.py:876-884` | Add `logger.warning(...)` in each False branch when `is_premium=True`, so ops can spot the anomaly if it ever occurs. |
+| 5.M | 🟢 | `_ALLOWED_ORIGINS` includes `https://flourish123-production.up.railway.app` (backend URL). Harmless — a checkout with that origin returns a URL redirecting to the backend, which has no `/?success=true` route (probably 404). Odd inclusion. | `backend/server.py:568-572` | Remove backend URL from `_ALLOWED_ORIGINS`. |
+
+---
+
+
 
