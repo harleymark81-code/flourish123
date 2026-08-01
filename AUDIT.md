@@ -83,3 +83,39 @@ temperature 0 at server.py:1070, 60s httpx timeout, 20/min IP rate limit
 | 2.H | 🟢 | Rubric penalties compress at Step 4's floor (5). Many ultra-processed items bottom out at ~15 with reduced granularity. Note only. | `backend/server.py:1000-1017` | None — accept trade-off. |
 
 ---
+
+## Section 3 — Barcode
+
+**Scope:** provider lookup, hit / miss / error handling, scanner UX, cache interaction.
+
+**Functions audited:**
+Backend — `lookup_barcode` (server.py:2354).
+Frontend — `BarcodeScanner` (BarcodeScanner.jsx:23), `BarcodeScanner.useEffect`
+camera bring-up (BarcodeScanner.jsx:29-90), `BarcodeScanner.submitManual`
+(BarcodeScanner.jsx:92), `BarcodeScanner.handleClose` (BarcodeScanner.jsx:100),
+`HomeScreen.handleBarcodeResult` (HomeScreen.jsx:362).
+
+**Config:** zxing formats restricted to product barcodes (EAN_13/EAN_8/UPC_A/UPC_E/
+CODE_128/CODE_39/ITF) with TRY_HARDER at BarcodeScanner.jsx:11-21;
+`facingMode:{ideal:"environment"}`; 10s httpx timeout on OFF request;
+30/min IP rate-limit on `/food/barcode/{barcode}`.
+
+**Provider:** OpenFoodFacts v0 API (`world.openfoodfacts.org`). Unauthenticated,
+anonymous fair-use.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 3.A | 🟡 | `lookup_barcode` collapses "OFF down / timeout / malformed JSON" and "product not in DB" into the same `{found:False}` response. Frontend / ops cannot distinguish; OFF outage looks like a Flourish bug to users. | `backend/server.py:2376-2378` | Distinct payload on exception (`provider_down:true` or HTTP 502) + separate frontend message + PostHog `ph.barcodeProviderDown()`. |
+| 3.B | 🟡 | OFF provider lookup is NOT cached. Every scan hits OFF even for barcodes seen minutes ago. Sustained traffic risks OFF throttling / IP block → all barcode scans break app-wide. | `backend/server.py:2352-2378` (no cache) | New `off_lookup_cache` Mongo collection (barcode PK, TTL 24h), or extend `barcode_cache` to also hold `{off_name, off_ingredients, off_image}`. |
+| 3.C | 🟠 | Any authenticated user (incl. paywalled-out free users) can call `lookup_barcode` unlimited (up to 30/min per IP). No `_effective_premium` gate. Not $-costly for Flourish (Anthropic call is elsewhere) but consumes OFF quota + our egress. | `backend/server.py:2354-2378` — missing gate | Optional per-user counter, or accept 30/min IP limit. |
+| 3.D | 🟢 | `image_url` from OFF returned unvalidated → stored in diary + cache, rendered client-side as `<img src>`. Subresource request goes to whatever host OFF names. No XSS; OFF is trusted. Very low severity. | `backend/server.py:2367` | Optional allowlist: `image_url.startswith("https://images.openfoodfacts.org/")`. |
+| 3.E | 🟢 | `barcode.isalnum()` validation is correct for the format list (CODE_128/39 can carry letters) and rejects empty. No change needed. | `backend/server.py:2355` | None. |
+| 3.F | 🟢 | 400 "Invalid barcode format" is masked by frontend catch showing generic "Couldn't look up." | `frontend/src/components/HomeScreen.jsx:388` | Surface `e.response?.data?.detail` when present. |
+| 3.G | 🟢 | `ph.manualFoodEntryStarted` fires on both onFocus and submit → duplicate PostHog events per manual entry. | `frontend/src/components/BarcodeScanner.jsx:95` and `:278` | Drop the onFocus binding. Revisit in §8. |
+| 3.H | 🟢 | `useEffect` in BarcodeScanner has `[]` deps + eslint-disable. Captures `onResult` closure. Fine in current call sites (parent unmounts scanner on hide) but fragile if reused. | `frontend/src/components/BarcodeScanner.jsx:90` | None — behavior is fine. |
+| 3.I | ⏸ (dup §2.B) | Rating cache still carries per-user narrative fields; touches the barcode lookup flow. | `backend/server.py:1136` | Awaiting user decision. |
+
+---
+
