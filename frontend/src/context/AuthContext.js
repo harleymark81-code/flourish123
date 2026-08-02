@@ -37,16 +37,42 @@ export function AuthProvider({ children }) {
         identifyUser(res.data);
       })
       .catch(err => {
-        if (axios.isCancel(err)) {
-          console.warn("[Flourish] auth init timed out — falling back to logged-out");
+        // Finding 1.A — only clear token on 401 (revoked/expired). On 5xx,
+        // network drop, timeout, or cancel we keep the token so the PWA
+        // recovers on the next successful request rather than logging users
+        // out on any Railway hiccup.
+        if (err?.response?.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          setUser(null);
+        } else if (axios.isCancel(err)) {
+          console.warn("[Flourish] auth init timed out — keeping token, falling back to logged-out UI");
+          setUser(null);
+        } else {
+          console.warn("[Flourish] auth init non-401 failure — keeping token", err?.response?.status);
+          setUser(null);
         }
-        localStorage.removeItem(TOKEN_KEY);
-        setUser(null);
       })
       .finally(() => {
         clearTimeout(timeout);
         setLoading(false);
       });
+
+    // Finding 1.D — global 401 interceptor. Any request during the session
+    // that returns 401 (revoked token, JWT_SECRET rotated) clears local
+    // auth state so the app doesn't stay in a zombie signed-in shell.
+    const interceptorId = axios.interceptors.response.use(
+      (resp) => resp,
+      (error) => {
+        if (error?.response?.status === 401) {
+          localStorage.removeItem(TOKEN_KEY);
+          setUser(null);
+        }
+        return Promise.reject(error);
+      }
+    );
+    return () => {
+      axios.interceptors.response.eject(interceptorId);
+    };
   }, []);
 
   const register = async (email, password, name) => {
@@ -125,7 +151,13 @@ export function AuthProvider({ children }) {
       const res = await axios.get(`${API}/auth/me`, { headers: getHeaders() });
       setUser(res.data);
     } catch (e) {
-      console.error("[Flourish] refreshUser failed:", e);
+      // Finding 1.C — a 401 here means the session is dead; the global
+      // interceptor above already clears storage but we still surface a
+      // console.warn for observability. On other failures (5xx, network),
+      // leave state alone so the caller can retry.
+      if (e?.response?.status !== 401) {
+        console.warn("[Flourish] refreshUser transient failure — keeping user state:", e?.response?.status);
+      }
     }
   };
 
