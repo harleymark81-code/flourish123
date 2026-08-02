@@ -331,3 +331,58 @@ referrer. Trial extension: 14 days (vs standard 3/7) for referred users.
 | 7.O | 🟢 | **`payment_transactions.referral_code` set at checkout creation** to the referred user's `referred_by` (server.py:1602). `/referral/stats` count of `paying_referrals` filters on `payment_status="paid"`, so abandoned trials don't inflate the count. Consistent with `referral_count` on webhook path. | `backend/server.py:1593-1604` + `2044-2050` | None. |
 
 ---
+
+## Section 8 — PostHog Analytics
+
+**Scope:** frontend init, event coverage (52 `ph.*` events), backend
+`_ph_capture` calls, API key config, PII / consent posture.
+
+**Functions audited:**
+Frontend — `initPostHog` (lib/posthog.js:6-18), `identifyUser` (lib/posthog.js:22-31),
+`resetUser` (lib/posthog.js:33), `track` (lib/posthog.js:39-45),
+the `ph` object (lib/posthog.js:49-159) — 52 keyed events.
+Backend — `_ph_capture` (server.py:36-41). Callers: `get_patterns`
+(server.py:1409, 1414), `stripe_webhook.checkout.session.completed`
+(server.py:1812), `stripe_webhook.customer.subscription.deleted`
+(server.py:1883), `stripe_webhook.invoice.payment_succeeded` referral
+(server.py:1942).
+Entry point — `index.js:8` calls `initPostHog()` on app boot (pre-auth).
+
+**Config:** `POSTHOG_KEY = process.env.REACT_APP_POSTHOG_KEY || "phc_PLACEHOLDER"`
+(lib/posthog.js:3). `POSTHOG_HOST = "https://eu.i.posthog.com"` (EU cloud —
+good for GDPR). PostHog options: `capture_pageview:true`, `capture_pageleave:true`,
+`session_recording:{maskAllInputs:true}`, `autocapture:true`. Backend
+`_ph.project_api_key = os.environ.get("POSTHOG_API_KEY", "")` +
+`_ph.disabled = not os.environ.get("POSTHOG_API_KEY", "")` (server.py:31-34).
+
+**Local `.env` state:** `frontend/.env:6` = `REACT_APP_POSTHOG_KEY=phc_REPLACE_WITH_YOUR_KEY`
+(placeholder). `backend/.env` does not set `POSTHOG_API_KEY` — backend PostHog
+disabled locally.
+
+**Netlify build env:** `netlify.toml:6-8` declares `REACT_APP_BACKEND_URL` and
+`REACT_APP_FRONTEND_URL` only. `REACT_APP_POSTHOG_KEY` is NOT declared here —
+must be configured in the Netlify dashboard env panel or the placeholder ships.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 8.A | 🔴 | **PostHog silently disabled in production if Netlify env panel doesn't override `REACT_APP_POSTHOG_KEY`.** Local `frontend/.env:6` value is the placeholder `phc_REPLACE_WITH_YOUR_KEY`; `netlify.toml` does not set the var; `initPostHog` short-circuits with only a `console.warn` (posthog.js:7-10). If the Netlify dashboard var was ever unset, rotated, or the build cache was corrupted, the deploy ships with zero analytics and there is no runtime error. **Verify Netlify dashboard has `REACT_APP_POSTHOG_KEY` set to the real phc_… key BEFORE launch.** | `frontend/src/lib/posthog.js:3-10`, `frontend/.env:6`, `netlify.toml` | (1) Add a build-time hard-fail: in `frontend/scripts/prebuild.js`, throw if `process.env.REACT_APP_POSTHOG_KEY?.startsWith("phc_") && !== "phc_PLACEHOLDER" && !== "phc_REPLACE_WITH_YOUR_KEY"`. (2) Add the key to `netlify.toml` as a build var reference (not the value). (3) Optional runtime beacon: fire a one-shot fetch to a `/healthz` endpoint with `has_analytics: true/false` on boot. |
+| 8.B | 🔴 | **Backend PostHog silently disabled if `POSTHOG_API_KEY` env var is unset on Railway** — `_ph_capture` guards on `_ph.project_api_key`, no-ops silently (server.py:36-41). No startup log, no metric, no alert. Every backend-side conversion event (subscription_started, subscription_cancelled, referral_reward_earned, patterns_viewed) drops silently. | `backend/server.py:31-41` | Add to lifespan startup: `if not os.environ.get("POSTHOG_API_KEY","").strip(): logger.error("[startup] POSTHOG_API_KEY not set — server-side analytics disabled")`. Verify Railway env panel has the same key that frontend uses. |
+| 8.C | 🟡 | **`distinct_id` mismatch between frontend and backend splits users into two PostHog identities.** Frontend calls `posthog.identify(user.id || user._id, …)` at posthog.js:24 (uses MongoDB ObjectId string). Backend uses **email** as distinct_id at every `_ph_capture` call site (server.py:1409, 1414, 1812, 1883, 1942). Same real user appears twice in PostHog dashboards; funnels crossing frontend→backend events (e.g., `upgrade_cta_clicked` → `subscription_started`) will not stitch. | `backend/server.py:1409, 1414, 1812, 1883, 1942` (all `_ph_capture` calls use email) | Use the MongoDB `_id` string as distinct_id everywhere: `_ph_capture(str(uid), "event", {"email": email, ...})`. Alternatively, use `posthog.alias(email, user_id)` on the backend at signup. |
+| 8.D | 🔴 (**consent / GDPR**) | **No cookie / analytics consent banner anywhere in the app.** `initPostHog()` fires at `index.js:8` before any user interaction; `autocapture:true` immediately starts sending clicks, pageviews, and (unmasked) attribute values. `identifyUser` sends `email`, `name`, `conditions` (health data) to PostHog EU. For UK/EU users this is unlawful under UK-GDPR/PECR without prior explicit consent — and health data is a special category requiring opt-in. | `frontend/src/index.js:8`, `frontend/src/lib/posthog.js:6-31`, entire app | (1) Add a consent banner that must be accepted before `initPostHog()` runs. (2) Split consent: essential (analytics) vs marketing (identifiable). (3) Move `identifyUser`'s `conditions` field behind explicit medical-data consent. (4) Add a Privacy Policy + Cookie Policy page. **Non-negotiable for UK launch.** |
+| 8.E | 🟡 | **Session recording enabled with `maskAllInputs:true`** — good for passwords, but session recording still captures DOM text (rendered rating narratives include user conditions and personalised medical text). If a user logs symptoms and sees their patterns page, the recording contains the personalised medical content even though input values are masked. | `frontend/src/lib/posthog.js:15` | Add `maskAllText: true` in session_recording options for authenticated views, or disable session_recording on `/insights`, `/diary`, `/patterns` via `posthog.stopSessionRecording()` guards. Gate all recording on explicit consent (8.D). |
+| 8.F | 🟡 | **`ph.scanLimitReached()` fires on every successful free scan** (FreeScanScreen.jsx:113) — not only when the limit is actually reached. Skews the conversion funnel: every free-scan event pretends to be a paywall trigger. Recap of 2.G. | `frontend/src/components/FreeScanScreen.jsx:113` | Fire only if backend response indicates the scan was consumed (e.g., response includes `free_scan_consumed: true`). Or fire on the NEXT scan attempt when the paywall is actually shown. |
+| 8.G | 🟠 | **`ph.manualFoodEntryStarted` double-fires** — once on `onFocus` (BarcodeScanner.jsx:278) and again on submit (BarcodeScanner.jsx:95). Recap of 3.G. Inflates the manual-entry event count by 2×. | `frontend/src/components/BarcodeScanner.jsx:95` and `278` | Drop the `onFocus` binding; keep the submit fire. |
+| 8.H | 🟠 | **`ph.foodSearched(query)` at HomeScreen.jsx:358 and FreeScanScreen.jsx:107 sends the raw search query.** Users may search for health-sensitive terms ("PCOS-friendly bread", "endo-safe snacks"). Under UK-GDPR this is category-9 health data being transmitted to a processor without explicit consent (see 8.D). | `frontend/src/components/HomeScreen.jsx:358`, `frontend/src/components/FreeScanScreen.jsx:107` | Truncate to first token, hash, or omit the query. Alternatively gate on medical-data consent. |
+| 8.I | 🟠 | **`identifyUser` sends `conditions` field to PostHog** (lib/posthog.js:28) — this is medical data. Even after 8.D consent is added, `conditions` should be a separate opt-in. | `frontend/src/lib/posthog.js:22-31` | Strip `conditions` from identify by default; only include if user opts into "personalised analytics." |
+| 8.J | 🟢 | **PostHog client-side errors swallowed silently.** `track()` has a bare `try/catch` (lib/posthog.js:39-45) that neither re-throws nor logs. Same for `_ph_capture` on backend. Debugging a broken analytics pipeline requires PostHog's dashboard to notice. | `frontend/src/lib/posthog.js:39-45`, `backend/server.py:36-41` | Add `console.warn` on catch in frontend; `logger.warning` on backend catch. Cheap ops-visibility. |
+| 8.K | 🟢 | **No PostHog event when `call_anthropic` fails** (server.py:62-95). Backend has no `_ph_capture("system","ai_error",{...})` — outages invisible to analytics. Frontend logs `ph.apiError("/food/rate", ...)` on the client side, which catches user-visible failures but not backend Anthropic outages that succeed at HTTP layer but with bad JSON. | `backend/server.py:62-95` (`call_anthropic`) | Fire `_ph_capture("system","anthropic_error",{"model":ANTHROPIC_MODEL,"exc_type":type(exc).__name__})` in the retry/reraise path. |
+| 8.L | 🟢 | **No PostHog on `/support/contact`, `/auth/forgot-password`, `/auth/reset-password` completion.** Support-funnel and password-reset-recovery cohorts are invisible. | `backend/server.py:766`, `2629-2670` | Add `_ph_capture(email, "support_ticket_sent")` and `_ph_capture(email, "password_reset_completed")`. |
+| 8.M | 🟢 | **No PostHog on `/affiliate/apply`.** Affiliate signup funnel invisible. | `backend/server.py:2107` | Add `_ph_capture(email, "affiliate_application_submitted", {"niche":condition_niche})`. |
+| 8.N | 🟢 | **`autocapture:true`** (lib/posthog.js:16) captures every click and form interaction. Combined with `maskAllInputs:true` this is generally OK, but click-target `aria-label`/`data-testid` attrs are captured and may leak internal names. | `frontend/src/lib/posthog.js:16` | Consider `autocapture:{dom_event_allowlist:["click"], element_allowlist:["a","button"]}` to restrict scope. |
+| 8.O | 🟢 | **`identifyUser(user)` sends `plan: user.is_premium ? "premium" : "free"`** but reads `user.is_premium` from the client-side snapshot — trial users may show `premium` while their `_effective_premium` server-side check is more nuanced. Cohort accuracy drift. | `frontend/src/lib/posthog.js:27` | Include `is_trialing` and `premium_expires_at` fields; recompute on refreshUser. |
+| 8.P | 🟢 | **PostHog EU host hardcoded** (`https://eu.i.posthog.com` at posthog.js:4 and server.py:33) — correct for GDPR. Note only. | `frontend/src/lib/posthog.js:4`, `backend/server.py:33` | None. |
+| 8.Q | 🟢 | **Backend PostHog uses sync `_ph.capture` from a request handler.** The Python posthog SDK is thread-based (non-blocking) so this is OK, but a wedged posthog thread could accumulate memory. Note only. | `backend/server.py:39` | None. |
+
+---
