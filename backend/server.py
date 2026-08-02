@@ -616,6 +616,12 @@ async def register(request: Request, data: RegisterRequest):
         logger.info(f"[register] rejected — email already registered: {email}")
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Finding 7.A — normalise referral code on write so webhook / affiliate
+    # lookups match regardless of URL casing (URL shorteners lowercase, users
+    # copy-paste variants). All generated `referral_code` values are already
+    # `.upper()` at creation.
+    normalized_ref = (data.referred_by or "").strip().upper() or None
+
     user_doc = {
         "email": email,
         "password_hash": hash_password(data.password),
@@ -632,7 +638,7 @@ async def register(request: Request, data: RegisterRequest):
         "premium_plan": None,
         "premium_expires_at": None,
         "referral_code": str(uuid.uuid4())[:8].upper(),
-        "referred_by": data.referred_by or None,
+        "referred_by": normalized_ref,
         "referral_rewarded": False,
         "referral_count": 0,
         "affiliate_code": (data.affiliate_code or "").strip().upper() or None,
@@ -651,12 +657,11 @@ async def register(request: Request, data: RegisterRequest):
     user_doc["_id"] = str(result.inserted_id)
     user_doc.pop("password_hash", None)
 
-    # Track referral signup
-    if data.referred_by:
-        logger.info(f"[register] referred_by={data.referred_by} for new user {email}")
-        # Increment affiliate signup counter if the code belongs to an affiliate
+    # Track referral signup (uses normalised code so affiliate lookup matches)
+    if normalized_ref:
+        logger.info(f"[register] referred_by={normalized_ref} for new user {email}")
         await db.affiliate_applications.update_one(
-            {"affiliate_code": data.referred_by},
+            {"affiliate_code": normalized_ref},
             {"$inc": {"signups": 1}}
         )
 
@@ -1917,7 +1922,9 @@ async def stripe_webhook(request: Request):
                             return_document=False,  # pre-update doc
                         )
                         if claim:
-                            ref_code = claim.get("referred_by", "")
+                            # Finding 7.A — normalise for legacy pre-fix rows
+                            # whose referred_by may still be lowercase.
+                            ref_code = (claim.get("referred_by", "") or "").strip().upper()
                             referrer = await db.users.find_one(
                                 {"referral_code": ref_code},
                                 {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "referral_count": 1}

@@ -78,13 +78,16 @@ export function AuthProvider({ children }) {
   const register = async (email, password, name) => {
     // Read referral code: URL param takes priority, then localStorage
     // (localStorage is set by App.js on landing and survives tab closes/refreshes).
-    const ref = new URLSearchParams(window.location.search).get("ref")
+    // Finding 7.A — normalise here as defence-in-depth even though App.js
+    // now normalises on capture; direct navigation with `?ref=abc123` that
+    // never hits App.js's landing effect would otherwise slip through.
+    const ref = (new URLSearchParams(window.location.search).get("ref")
       || localStorage.getItem("fl_ref")
-      || "";
+      || "").trim().toUpperCase();
     // Standalone affiliate code (independent of the user-referral system).
     // Stored under its own localStorage key so the two systems can evolve
     // independently; the backend treats each field independently.
-    const affiliateCode = localStorage.getItem("affiliate_code") || ref || "";
+    const affiliateCode = (localStorage.getItem("affiliate_code") || ref || "").trim().toUpperCase();
     // Build payload explicitly — no undefined values that could be mishandled
     const payload = {
       email: email.trim().toLowerCase(),

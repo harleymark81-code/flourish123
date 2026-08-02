@@ -126,7 +126,9 @@ function AppContent() {
     const params = new URLSearchParams(window.location.search);
     // Persist referral code to localStorage so it survives tab closes,
     // page refreshes, and navigation before the visitor signs up.
-    const ref = params.get("ref");
+    // Finding 7.A — normalise to upper+trim on capture so URL-shortener
+    // lowercasing / manual copy variants still match the stored uppercase code.
+    const ref = (params.get("ref") || "").trim().toUpperCase();
     if (ref) {
       localStorage.setItem("fl_ref", ref);
       // Mirror the same code into the standalone affiliate ledger key. The
