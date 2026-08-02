@@ -2162,14 +2162,16 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     })
     paying_referrals = monthly_refs + annual_refs
 
+    # Finding 7.D — commission fields removed. This is a free-months reward
+    # system, not a cash-commission payout — leaving £-denominated fields in
+    # the response misled users into expecting cash. The affiliate system
+    # (separate endpoint /api/affiliate/dashboard) still returns commission
+    # figures because that IS a cash-payout program.
     return {
         "referral_code": referral_code,
         "referral_link": f"{frontend_url}?ref={referral_code}",
         "paying_referrals": paying_referrals,
         "free_months_earned": paying_referrals,
-        "monthly_commission": round(monthly_refs * 12.99 * 0.30, 2),
-        "annual_commission": round(annual_refs * 49.99 * 0.30, 2),
-        "total_commission": round((monthly_refs * 12.99 + annual_refs * 49.99) * 0.30, 2)
     }
 
 @api_router.get("/referrals/stats")
