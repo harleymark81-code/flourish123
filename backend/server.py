@@ -267,8 +267,33 @@ async def lifespan(app: FastAPI):
     await db.off_lookup_cache.create_index("cached_at", expireAfterSeconds=86400)
     await db.diary.create_index([("user_id", 1), ("date", -1)])
     await db.diary.create_index("scan_id", unique=True, sparse=True)
-    # Referral indexes — used by webhook lookup and stats queries
-    await db.users.create_index("referral_code", sparse=True)
+    # Referral indexes — used by webhook lookup and stats queries.
+    # Finding 7.B — migrate referral_code to unique+sparse. Only add the
+    # unique constraint if no existing dups (Mongo would otherwise refuse
+    # to create the index and the server would fail to start).
+    _dup_pipeline = [
+        {"$match": {"referral_code": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": "$referral_code", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 1},
+    ]
+    try:
+        _has_dup = await db.users.aggregate(_dup_pipeline).to_list(1)
+        if _has_dup:
+            logger.warning(
+                "[startup] referral_code has existing duplicates — keeping index "
+                "sparse-only; _generate_unique_referral_code still enforces uniqueness for new codes"
+            )
+            await db.users.create_index("referral_code", sparse=True)
+        else:
+            # Drop the old sparse-only index if present, then create unique+sparse.
+            try:
+                await db.users.drop_index("referral_code_1")
+            except Exception:
+                pass
+            await db.users.create_index("referral_code", unique=True, sparse=True)
+    except Exception as _e:
+        logger.error(f"[startup] referral_code index migration failed: {_e}")
     await db.payment_transactions.create_index("referral_code", sparse=True)
     # Standalone affiliate ledger (independent of affiliate_applications/referrals)
     await db.affiliates.create_index("code", unique=True)
@@ -637,7 +662,7 @@ async def register(request: Request, data: RegisterRequest):
         "is_premium": False,
         "premium_plan": None,
         "premium_expires_at": None,
-        "referral_code": str(uuid.uuid4())[:8].upper(),
+        "referral_code": await _generate_unique_referral_code(),
         "referred_by": normalized_ref,
         "referral_rewarded": False,
         "referral_count": 0,
@@ -804,6 +829,24 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
         "has_used_free_scan": has_used_free_scan,
         "free_scan_available": not has_used_free_scan and not effective_premium,
     }
+
+async def _generate_unique_referral_code(max_attempts: int = 5) -> str:
+    """Finding 7.B — pre-check helper that avoids uuid4-truncation collisions.
+
+    8-char uppercase hex ≈ 32 bits ≈ 4.29B combinations; birthday-collision
+    at ~50% around 77k users. This helper does a find_one probe before
+    returning a code so the DB unique constraint (added in lifespan startup)
+    is only exercised in the extreme race where two concurrent registrations
+    generate the same code between probe and insert. If all 5 attempts
+    collide (astronomically unlikely), fall back to a 12-char code.
+    """
+    for _ in range(max_attempts):
+        code = str(uuid.uuid4())[:8].upper()
+        existing = await db.users.find_one({"referral_code": code}, {"_id": 1})
+        if not existing:
+            return code
+    return str(uuid.uuid4())[:12].upper()
+
 
 async def _compute_streak_from_diary(uid: str) -> tuple[int, Optional[str]]:
     """Derive consecutive-day streak from diary entries (the only source of truth
@@ -2047,7 +2090,7 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     # Older accounts may have been created before the referral_code field was
     # added — generate one lazily and persist it so the link always works.
     if not referral_code:
-        referral_code = str(uuid.uuid4())[:8].upper()
+        referral_code = await _generate_unique_referral_code()
         await db.users.update_one(
             {"_id": ObjectId(uid)},
             {"$set": {"referral_code": referral_code}}
@@ -2076,7 +2119,7 @@ async def get_referrals_stats(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
     referral_code = current_user.get("referral_code", "")
     if not referral_code:
-        referral_code = str(uuid.uuid4())[:8].upper()
+        referral_code = await _generate_unique_referral_code()
         await db.users.update_one(
             {"_id": ObjectId(uid)},
             {"$set": {"referral_code": referral_code}}
