@@ -386,3 +386,66 @@ must be configured in the Netlify dashboard env panel or the placeholder ships.
 | 8.Q | 🟢 | **Backend PostHog uses sync `_ph.capture` from a request handler.** The Python posthog SDK is thread-based (non-blocking) so this is OK, but a wedged posthog thread could accumulate memory. Note only. | `backend/server.py:39` | None. |
 
 ---
+
+## Section 9 — Diary / Insights / My Foods / Profile / Patterns Engine
+
+**Scope:** every endpoint under diary, insights, favourites, shopping list,
+scan-history, badges, streaks, symptoms, patterns engine, and profile update.
+Focus on gating consistency, IDOR, and personalisation staleness.
+
+**Functions audited:**
+Backend — `log_to_diary` (server.py:1229), `get_diary` (server.py:1269),
+`get_diary_dates` (server.py:1283), `update_diary_note` (server.py:1297),
+`delete_diary_entry` (server.py:1306), `get_patterns` (server.py:1313),
+`log_symptoms` (server.py:1419), `get_today_symptoms` (server.py:1448),
+`get_symptom_history` (server.py:1457), `get_streak_reward` (server.py:1521),
+`get_favourites` (server.py:2381), `toggle_favourite` (server.py:2387),
+`check_favourite` (server.py:2403), `get_scan_history` (server.py:2410),
+`get_shopping_list` (server.py:2422), `add_shopping_item` (server.py:2429),
+`toggle_shopping_item` (server.py:2446), `remove_shopping_item`
+(server.py:2460), `clear_checked_items` (server.py:2469), `get_badges`
+(server.py:2530), `get_weekly_report` (server.py:2574), `update_profile`
+(server.py:728), `_refresh_streak` (server.py:846),
+`_compute_streak_from_diary` (server.py:798), diary auto-save inside
+`rate_food` (server.py:1097-1119).
+Frontend — `MyFoodsScreen` (MyFoodsScreen.jsx:26), `InsightsScreen`
+(InsightsScreen.jsx:295), `ProfileScreen` (ProfileScreen.jsx),
+`FoodDiary` (FoodDiary.jsx).
+
+**Config:** Diary auto-save runs for EVERY scan (free + premium) via
+`rate_food` shared exit path (server.py:1097). `get_diary` gates free
+users to today-only (server.py:1277). `get_scan_history` returns ALL
+diary entries with no date restriction. Pattern cache TTL: `<7 days` AND
+`<5 new logs since last generation`. Weekly report: last 7 UTC days.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 9.A | 🟡 | **Gating inconsistency: `/scan-history` is NOT premium-gated, but `/diary` IS** (free users see today only). `get_scan_history` (server.py:2410) returns ALL diary entries with full personalised rating fields (`dimensions`, `forYourCondition`, `alternatives`, `bodySystemsAffected`, `flags`). A free user has at most 1 auto-saved entry (their free scan), so blast radius is minimal at signup — but a previously-premium user who cancels retains full history access via `/scan-history` despite being paywall-locked out of `/diary`. Confusing gate semantics; potential enabler for churn-then-view workflow. | `backend/server.py:2410-2419` | Add `if not _effective_premium(current_user): raise HTTPException(403, ...)` OR downgrade `/scan-history` to return only `{food_name, overall_score, date}` for non-premium users, matching the free-tier promise. |
+| 9.B | 🟡 | **Pattern cache staleness on profile change.** `get_patterns` serves cached patterns for up to 7 days or until 5 new diary logs (server.py:1327-1338). If the user updates their `conditions` in profile (server.py:731), the cache is NOT invalidated — patterns generated for `["pcos"]` continue serving to a user now marked `["endo"]`. Same personalisation-violation class as 2.B / 3.I but for insights. | `backend/server.py:1313-1338` + `update_profile` (server.py:728) | Invalidate pattern cache on any `conditions`-changing PUT: `await db.pattern_cache.delete_one({"user_id": uid})` in `update_profile` when `conditions` differs. Also include the current conditions in the cache key. |
+| 9.C | 🟠 | **`update_diary_note` is NOT premium-gated** (server.py:1297). Free users cannot create diary entries (log gate at 1230), but the note-edit path is open. Harmless in practice (nothing to edit) but violates gate consistency. | `backend/server.py:1297-1304` | Add `if not _effective_premium(current_user): raise HTTPException(403, ...)`. |
+| 9.D | 🟠 | **`delete_diary_entry` is NOT premium-gated** (server.py:1306). Free user can delete their own auto-saved free-scan entry. Might be intentional UX; document either way. | `backend/server.py:1306-1311` | Product decision: gate or leave. |
+| 9.E | 🟠 | **`get_favourites`, `toggle_favourite`, `check_favourite` NOT premium-gated** (server.py:2381-2407). Free users can save unbounded favourites (no limit at DB layer). Cheap but violates the "unlimited favourites" premium promise from the marketing copy in `send_subscription_confirmed_email` (email.py:209). | `backend/server.py:2381-2407` | Add `_effective_premium` gate OR cap free-tier favourites at ~10 with a soft paywall. Align with marketing copy. |
+| 9.F | 🟠 | **All shopping-list endpoints NOT premium-gated** (server.py:2422-2476). Same class as 9.E — marketing copy positions "Unlimited favourites and shopping list" as premium. | `backend/server.py:2422-2476` | Same: gate or cap. Align with marketing copy. |
+| 9.G | 🟠 | **`get_badges` uses raw `is_premium` field** (server.py:2537, 2556), NOT `_effective_premium`. An expired-premium user (past `premium_expires_at` but before nightly `_sweep_expired_premium` runs at 00:00 UTC) still earns the `premium` badge. Up to 24 hours of stale badge state. | `backend/server.py:2537, 2556` | Replace with `is_premium = _effective_premium(current_user)`. |
+| 9.H | 🟠 | **`get_diary` hardcodes `to_list(100)`** (server.py:1280). A premium user with >100 same-day logs (edge case, but possible if importing/backfilling) silently loses entries. | `backend/server.py:1280` | Remove the cap or paginate; realistic max entries per day likely <20 but safer to log with `logger.warning` when the cap is hit. |
+| 9.I | 🟠 | **`get_diary_dates` capped at 365 entries** (server.py:1293). Users past 1 year of daily logging get their earliest days trimmed from the date picker. | `backend/server.py:1293` | Remove cap or return "has_older" flag when truncated so UI can prompt for older ranges. |
+| 9.J | 🟠 | **Weekly-report symptom cap `to_list(14)`** (server.py:2587) — assumes at most 2 symptoms per day for 7 days. `log_symptoms` uses `update_one({user_id, date}, upsert=True)` — one entry per date. So max entries is 7. Cap of 14 is generous. Note only. | `backend/server.py:2587` | None. |
+| 9.K | 🟠 | **Symptom history trend arithmetic amplifies small-number moves.** `pct = round(abs(delta / first_avg) * 100)` (server.py:1507). If first_avg is 0.5 and second_avg is 3.0, pct = 500%. Rendered as "Your energy has improved 500% recently — keep it up." Reads as absurd. | `backend/server.py:1507` | Cap displayed pct at 100% or use `(second_avg - first_avg) / 5` (5 = max scale) for a bounded percentage. |
+| 9.L | 🟠 | **Streak boundary is UTC-based** (`datetime.now(timezone.utc).date()` at server.py:819, 1234, 1273, 1424). Users in negative UTC offsets (US Pacific = UTC−8) may see their evening log count as "next day" from the server's perspective. Streak may lag or advance a day early relative to local time. Note-only if user base is UK/EU-heavy; real UX bug for global users. | `backend/server.py:798-843` (`_compute_streak_from_diary`), all diary/symptom `today = datetime.now(timezone.utc).date().isoformat()` sites | Accept user timezone (from profile or `Intl.DateTimeFormat().resolvedOptions().timeZone` at signup) and compute "today" in that zone. |
+| 9.M | 🟢 | **Diary auto-save at `rate_food` writes full rating fields** (server.py:1099-1119) with `$setOnInsert` — idempotent, safe on retry. Uses `scan_id` (uuid) as unique key. `db.diary.create_index("scan_id", unique=True, sparse=True)` at server.py:264. Correct. | `backend/server.py:1097-1119` | None. |
+| 9.N | 🟢 | **`log_to_diary` spreads `data.model_dump(exclude_none=True)`** then overwrites `user_id` (server.py:1236-1242). Pydantic model does NOT declare a `user_id` field (verified via Field list), so no spoof surface. `entry["user_id"] = uid` is defensive. | `backend/server.py:1236-1242` | None. |
+| 9.O | 🟢 | **`delete_diary_entry` filter includes `user_id`** (server.py:1310) — IDOR-safe. | `backend/server.py:1310` | None. |
+| 9.P | 🟢 | **`update_diary_note` filter includes `user_id`** (server.py:1301) — IDOR-safe. | `backend/server.py:1301` | None. |
+| 9.Q | 🟢 | **`toggle_shopping_item`, `remove_shopping_item`, `clear_checked_items`** all filter by `user_id` — IDOR-safe (server.py:2447-2475). | `backend/server.py:2447-2475` | None. |
+| 9.R | 🟢 | **Pattern cache fallback to stale cache on Anthropic failure** (server.py:1411-1416). Correct UX — user sees old patterns rather than empty state. Note only. | `backend/server.py:1411-1416` | None. |
+| 9.S | 🟢 | **`get_streak_reward` NOT gated** (server.py:1521-1538). Correct — streaks are free-tier feature; every authed user should see their milestone. | `backend/server.py:1521-1538` | None. |
+| 9.T | 🟢 | **`update_profile` whitelist correctness** (already verified as 4.I). Note only. | `backend/server.py:728-756` | None. |
+| 9.U | 🟢 | **`_refresh_streak` called from every authenticated request via `get_current_user`** — see 2.E (single aggregate query, cheap but not free). Also called from `log_to_diary`. Redundant. | `backend/server.py:458`, `_refresh_streak` at `846-867` | See 2.E — move to nightly cron. |
+| 9.V | 🟢 | **Pattern prompt string-interpolates user conditions** (server.py:1371-1391) — same prompt-injection surface as 2.F. `conditions_str` from user profile → prompt. Low risk (self-harm only). | `backend/server.py:1371-1391` | Wrap in delimiter tags. |
+| 9.W | 🟢 | **`log_symptoms` upsert on `(user_id, date)`** — natural idempotency; a re-check-in overwrites the earlier one for that day. Might surprise a user who checks in AM and PM. | `backend/server.py:1441-1445` | Product decision: overwrite (current) vs append multiple check-ins per day. |
+| 9.X | 🟢 | **`ProfileScreen.jsx:219` builds referral link with hardcoded `https://theflourishapp.health`** — recap of 7.H. Note only, keep with §7. | `frontend/src/components/ProfileScreen.jsx:216-219` | See 7.H. |
+| 9.Y | 🟢 | **`get_weekly_report` divides by counts guarded by ternary** (server.py:2590, 2594, 2595). Safe against div-by-zero. Note only. | `backend/server.py:2590-2595` | None. |
+
+---
