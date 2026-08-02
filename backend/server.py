@@ -1676,10 +1676,18 @@ async def create_checkout(data: CheckoutRequest, request: Request, current_user:
 
     try:
         trial_days = 7 if data.plan == "annual" else 3
+        # Finding 7.E — read referral_trial_claimed FRESH from DB right before
+        # the Stripe call, not from the request-time cached current_user. Two
+        # rapid checkouts would otherwise both see the flag as False (webhook
+        # hasn't marked it yet) and both request the 14-day trial.
+        fresh_user = await db.users.find_one(
+            {"_id": ObjectId(uid)},
+            {"referred_by": 1, "referral_rewarded": 1, "referral_trial_claimed": 1},
+        ) or {}
         use_referral_trial = (
-            bool(current_user.get("referred_by"))
-            and not current_user.get("referral_rewarded", False)
-            and not current_user.get("referral_trial_claimed", False)
+            bool(fresh_user.get("referred_by"))
+            and not fresh_user.get("referral_rewarded", False)
+            and not fresh_user.get("referral_trial_claimed", False)
         )
         if use_referral_trial:
             trial_days = 14
