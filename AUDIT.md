@@ -449,3 +449,87 @@ diary entries with no date restriction. Pattern cache TTL: `<7 days` AND
 | 9.Y | 🟢 | **`get_weekly_report` divides by counts guarded by ternary** (server.py:2590, 2594, 2595). Safe against div-by-zero. Note only. | `backend/server.py:2590-2595` | None. |
 
 ---
+
+## Section 10 — Config / Secrets / Deployment
+
+**Scope:** every environment variable, every hardcoded URL/email/key,
+CORS config, JWT secret handling, redirect_slashes, git history exposure,
+Railway + Netlify env expectations, startup checks, error tracking.
+
+**Files audited:**
+`backend/.env` (current — untracked), `backend/.env.example`,
+`backend/server.py` env reads, `backend/services/email.py` hardcoded URLs,
+`frontend/.env` (current — untracked), `frontend/src/lib/posthog.js`,
+`frontend/src/context/AuthContext.js`, `netlify.toml`, `railway.json`,
+`Dockerfile`, `.gitignore`.
+Git history: commits `ab08a64`, `a4474a5`, `26c98bf` (touched `.env` files).
+
+**Env vars read by backend (25 total):**
+`MONGO_URL` (server.py:216, required — KeyError at import if missing),
+`DB_NAME` (server.py:218, required), `JWT_SECRET` (server.py:425, required —
+KeyError at first `create_access_token` call), `ENVIRONMENT` (server.py:222,
+defaults to non-production), `ADMIN_SESSION_TOKEN` (server.py:225, 500 on
+admin routes if missing), `ADMIN_SECRET` (server.py:242, falls back to
+ADMIN_SESSION_TOKEN), `ADMIN_EMAIL` (server.py:303, defaults to
+`admin@flourish.app`), `ADMIN_PASSWORD` (server.py:304, raises RuntimeError
+at startup if missing), `CORS_ORIGINS` (server.py:361, 1561, optional
+non-prod), `ANTHROPIC_API_KEY` (server.py:64, silent until first Anthropic
+call then raises ValueError), `POSTHOG_API_KEY` (server.py:32, silent no-op),
+`STRIPE_SECRET_KEY` (server.py:1545, 1617, 1697, 1716, 2003 — returns 500
+if missing), `STRIPE_MONTHLY_PRICE_ID` (server.py:1552, 500 if missing),
+`STRIPE_ANNUAL_PRICE_ID` (server.py:1554, 1854, 1890, 500/silent),
+`STRIPE_WEBHOOK_SECRET` (server.py:1717, correctly rejects webhook with
+500), `RESEND_API_KEY` (services/email.py:38, silent per-call warn),
+`FRONTEND_URL` (server.py:2033, 2078, 2640 — silently defaults to
+`https://theflourishapp.health` non-www).
+
+**Env vars read by frontend (7 total):**
+`REACT_APP_BACKEND_URL` (AuthContext.js:5, AdminDashboard.jsx:5,
+AffiliateDashboard.jsx:6, AffiliateApplication.jsx:5 — defaults to Railway
+URL), `REACT_APP_POSTHOG_KEY` (posthog.js:3 — defaults to placeholder,
+silent disable), `REACT_APP_EMAILJS_SERVICE_ID`, `REACT_APP_EMAILJS_TEMPLATE_ID`,
+`REACT_APP_EMAILJS_PUBLIC_KEY` (App.js:171-179, AuthContext.js:85-93),
+`REACT_APP_STRIPE_PUBLISHABLE_KEY` (in `frontend/.env` — publishable key
+by design, safe to ship).
+
+**Git history — historical .env commits:**
+`ab08a64` (2026-04-05): first `backend/.env` — placeholders only, no
+secrets. `a4474a5`: second `backend/.env` — **CONTAINED REAL DEV
+SECRETS: `JWT_SECRET`, `ADMIN_PASSWORD`, `EMERGENT_LLM_KEY`.** `26c98bf`:
+deletion of both `.env` files. `.gitignore:84-85` now excludes `*.env` and
+`*.env.*` — current local files are correctly untracked.
+
+**Current local `backend/.env` (untracked):** contains LIVE
+`ANTHROPIC_API_KEY` and LIVE `STRIPE_SECRET_KEY`. Missing every other
+required var — server would not start against this file locally.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 10.A | 🔴 | **`JWT_SECRET` value was committed to git history** at `a4474a5` (visible via `git show a4474a5:backend/.env`): `flourish_jwt_secret_key_2026_very_secure_64_chars_abcdefghijklmnop`. If Railway's production `JWT_SECRET` env var is this same value (either through migration from the committed file or by the deployer copy-pasting from the dev file), **anyone with git-history access can mint valid JWTs for any user, bypassing all auth**. `create_access_token` uses HS256 (server.py:221, 436) so knowing the secret is enough to forge tokens. `token_version` revocation only helps AFTER an admin sees a compromise. | git commit `a4474a5:backend/.env`, `backend/server.py:425` (only reader) | **Verify Railway env panel** — if `JWT_SECRET` matches the committed string, rotate immediately AND `$inc: {token_version: 1}` on all `users` docs to invalidate every outstanding token. Consider `git filter-repo` to purge the value from history + force-push (destroys history but limits blast radius). |
+| 10.B | 🔴 | **`ADMIN_PASSWORD="Flourish2026"` committed to git history** (`a4474a5:backend/.env`) AND still present in `backend/tests/test_flourish.py:14`, `memory/PRD.md:20, 119`, `test_reports/iteration_2.json:51`. Admin panel is protected only by this password + 3/min rate limit (server.py:2244-2257). If Railway `ADMIN_PASSWORD` still matches, an attacker with git-history access can log in as admin and use admin routes (list users, grant admin, delete accounts). | git `a4474a5:backend/.env`, `backend/tests/test_flourish.py:14`, `memory/PRD.md:20`, `test_reports/iteration_2.json:51`, `backend/server.py:304, 2244-2257` | **Rotate `ADMIN_PASSWORD` on Railway to a new high-entropy value.** Update `test_flourish.py` to read from env, not hardcode. Delete the password from `PRD.md` and `test_reports/iteration_2.json` (docs / test artifacts). Consider `git filter-repo` for history. |
+| 10.C | 🟠 | **`EMERGENT_LLM_KEY="sk-emergent-4AfB2577e1fEfBcE67"` committed at `a4474a5`**. Not referenced anywhere in current code (verified via grep) — obsolete key from emergent.sh scaffolding. If the key is still valid on emergent.sh's platform, an attacker can drain the associated credit. Low blast radius (not Flourish's own key) but a real leaked credential in permanent git history. | git `a4474a5:backend/.env` | Revoke the key on emergent.sh. Include in the same `git filter-repo` cleanup as 10.A/10.B if pursued. |
+| 10.D | 🔴 (**recap of 5.B**) | **Trailing-slash webhook URL risk.** `app = FastAPI(title="Flourish API", lifespan=lifespan)` at server.py:349 does NOT set `redirect_slashes=False`. FastAPI default is `True`. If the Stripe dashboard webhook URL is `.../api/webhook/stripe/` (trailing slash), FastAPI returns 307 → Stripe does not follow 3xx on webhook delivery → **every webhook silently fails**. Users pay but only get upgraded via the immediate-unlock poll path; confirmation email + PostHog conversion skip (5.A). | `backend/server.py:349` + Stripe dashboard URL | (1) `app = FastAPI(title="Flourish API", lifespan=lifespan, redirect_slashes=False)`. (2) **Manually verify the Stripe dashboard webhook URL ends in `stripe` with no trailing slash.** Do NOT ship until both are confirmed. |
+| 10.E | 🟡 | **`ADMIN_EMAIL` default is `admin@flourish.app`** (server.py:303) — WRONG DOMAIN. The real domain is `theflourishapp.health` (matches the Netlify site). If `ADMIN_EMAIL` env var is unset on Railway, the startup owner-grant creates an admin user for a bogus email. Password reset for the real admin then goes to a mailbox no one owns. | `backend/server.py:303` | Default to `admin@theflourishapp.health` or (safer) make required — raise if missing at startup. |
+| 10.F | 🟡 | **Missing startup validation for critical env vars.** `MONGO_URL`, `DB_NAME`, `ADMIN_PASSWORD` fail loudly (KeyError/RuntimeError at import/startup) — good. But `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_MONTHLY_PRICE_ID`, `STRIPE_ANNUAL_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `POSTHOG_API_KEY`, `JWT_SECRET` (raises only at first token mint) can all be missing/typo'd on Railway and the server will still start. Users hit 500s or silent-drop features. Recap of 6.A, 8.B; consolidated here. | `backend/server.py:253-346` (lifespan) | Add a `_check_required_env()` call at top of `lifespan` that raises `RuntimeError` listing every missing required var. Non-required vars (POSTHOG, FRONTEND_URL) warn only. |
+| 10.G | 🟡 | **CORS `_allow_origins` at server.py:355-359 includes `https://flourish123-production.up.railway.app`** (backend URL). Harmless origin (no valid callback URL there) but semantically odd and appears twice — also in `_ALLOWED_ORIGINS` set at server.py:568-572 used by `create_checkout` (recap of 5.M). | `backend/server.py:355-359` + `568-572` | Remove `flourish123-production.up.railway.app` from both. |
+| 10.H | 🟡 | **CORS `allow_origins` list is hardcoded** (server.py:355-359). Any future domain migration (staging.theflourishapp.health, app.theflourishapp.health, mobile-webview.theflourishapp.health) requires a code change + redeploy. | `backend/server.py:355-359` | Move to env: `CORS_ORIGINS_ALLOWLIST=https://theflourishapp.health,https://www.theflourishapp.health` and parse at startup. Keep the fallback hardcoded list for safety if env is unset. |
+| 10.I | 🟡 | **`FRONTEND_URL` silently defaults to `https://theflourishapp.health`** (non-www) at `server.py:2033, 2078, 2640` and hardcoded at `services/email.py:23`. All password-reset links, referral links, and email CTAs go to non-www. Users on `www.theflourishapp.health` get bounced cross-origin, potentially losing httpOnly cookie context. Recap of 5.H, 6.O, 7.H. | `backend/server.py:2033, 2078, 2640` + `backend/services/email.py:23` | Consolidate to a single module-level `FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")`. Also treat www + non-www as equivalent when redirecting from Stripe checkout. |
+| 10.J | 🟠 | **Hardcoded admin/support emails throughout backend.** `theflourishfoodapp@gmail.com` at server.py:331 (owner-grant startup), server.py:2109 (affiliate application recipient); `hello@theflourishapp.health` at server.py:767 (support inbox), services/email.py:22 (reply-to). Any rebrand or address rotation requires code changes. | `backend/server.py:331, 767, 2109` + `backend/services/email.py:21-23` | Env-driven: `ADMIN_INBOX_EMAIL`, `SUPPORT_INBOX_EMAIL`, `OWNER_GRANT_EMAIL`. |
+| 10.K | 🟠 | **No error tracking / crash reporting installed** (no Sentry, Rollbar, Bugsnag). Production 500s are only visible if someone tails Railway logs. Unhandled frontend exceptions bubble to the ErrorBoundary (index.js:5) but never phone home. First user complaint is the first signal of a crash. | Missing dependency, both `backend/requirements.txt` and `frontend/package.json` | Add `sentry-sdk[fastapi]` on backend (initialize in lifespan startup gated on `SENTRY_DSN`) + `@sentry/react` on frontend. Free tier covers small apps. |
+| 10.L | 🟠 | **`.env.example` missing `ADMIN_SECRET`** — referenced at server.py:242 for the standalone affiliate admin endpoints, not documented in the example file. Deployer setting up a fresh Railway instance will not know to set it; will silently fall back to `ADMIN_SESSION_TOKEN` (fine but undocumented). | `backend/.env.example` (missing entry) | Add `# ADMIN_SECRET=<optional-separate-affiliate-admin-secret>` to `.env.example`. |
+| 10.M | 🟠 | **Backend log level is INFO in production** (server.py:209). Every login writes `is_admin`, `is_premium`, `role` at INFO (1.E), `[register] referred_by=<raw>` at INFO (7.G exploit surface), `Stripe webhook received: <type>` at INFO (server.py:1738). Log tails aggregate PII. | `backend/server.py:209` | Set via env: `LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING").upper()`. Keep DEBUG for troubleshooting; default to WARN in production. |
+| 10.N | 🟠 | **`netlify.toml:6-8` declares only 2 build env vars** (`REACT_APP_BACKEND_URL`, `REACT_APP_FRONTEND_URL`). The other 5 (`REACT_APP_POSTHOG_KEY`, `REACT_APP_EMAILJS_SERVICE_ID`, `REACT_APP_EMAILJS_TEMPLATE_ID`, `REACT_APP_EMAILJS_PUBLIC_KEY`, `REACT_APP_STRIPE_PUBLISHABLE_KEY`) must be set in the Netlify dashboard env panel. If any are missing at build time, they ship as `undefined` and features silently break: PostHog disabled (8.A), EmailJS signup notifications throw at runtime (AuthContext.js:83-97 already wrapped in try/catch), Stripe.js not initialised. | `netlify.toml` | Either declare all vars in `netlify.toml` (values still come from Netlify dashboard via `${VAR}` reference syntax) OR add a `frontend/scripts/prebuild.js` that hard-fails when any required `REACT_APP_*` var is unset. |
+| 10.O | 🟠 | **`Dockerfile` does not run as non-root** (implicit root). Also no `HEALTHCHECK` directive, so Railway relies on TCP-level checks only — a stuck asyncio event loop that stops responding to HTTP won't be detected. | `Dockerfile:1-13` | Add `RUN adduser --system --group flourish && USER flourish` (chown app dir). Add `HEALTHCHECK --interval=30s CMD curl -f http://localhost:${PORT:-8000}/api/ || exit 1`. |
+| 10.P | 🟠 | **`railway.json` `restartPolicyMaxRetries: 10`** with default backoff — 10 restart attempts on failure before Railway gives up. During a bad env-var rotation this could burn credits fast; more importantly, once retries exhaust, the app is DOWN with no auto-recovery until manual intervention. No paging/alert. | `railway.json:8` | Consider raising to a higher number (Railway max is often 50) OR wire Railway's built-in alert email to the on-call inbox. |
+| 10.Q | 🟢 | **`.gitignore:84-85`** correctly excludes `*.env` and `*.env.*`. Current local `.env` files are untracked. Note only — historical exposure is 10.A/10.B/10.C above. | `.gitignore:84-85` | None (already correct). |
+| 10.R | 🟢 | **`STRIPE_WEBHOOK_SECRET` missing check is correct** — server.py:1720-1722 raises 500 if unset, preventing unauthenticated webhook processing. Note only. | `backend/server.py:1720-1722` | None. |
+| 10.S | 🟢 | **JWT algorithm is HS256** (server.py:221) with symmetric secret — appropriate for single-service backend. Note only. `alg=none` vulnerability not possible with `jwt.encode(..., algorithm=JWT_ALGORITHM)` since PyJWT rejects algorithm-confusion by default. | `backend/server.py:221, 436, 446` | None. |
+| 10.T | 🟢 | **`Dockerfile` uses `python:3.11-slim`** — pinned major.minor but not patch. Weekly Docker rebuild picks up 3.11.x security patches automatically. Acceptable trade-off. | `Dockerfile:1` | None (or pin to `python:3.11.11-slim` if reproducibility trumps auto-patch). |
+| 10.U | 🟢 | **`Dockerfile` copies `backend/` only** — no test dir, no docs, no secrets from repo root. Image surface is minimal. Note only. | `Dockerfile:5` | None. |
+| 10.V | 🟢 | **PostHog EU host hardcoded** (server.py:33, posthog.js:4) — correct for GDPR posture. Note only, recap of 8.P. | `backend/server.py:33`, `frontend/src/lib/posthog.js:4` | None. |
+| 10.W | 🟢 | **Frontend `build/` contains no Stripe live key** (verified via `grep -E "pk_live_[A-Za-z0-9]{20}" build/`). Local `REACT_APP_STRIPE_PUBLISHABLE_KEY=pk_live_...` only ships when Netlify build runs, and publishable keys are safe to expose (they authorize Stripe.js in the browser). Note only. | `frontend/.env:5`, `frontend/build/` | None. |
+| 10.X | 🟢 | **`ADMIN_EMAIL` password rewrite on every startup** if password doesn't match (server.py:324-328) — allows env-driven password rotation without a manual DB step. Note only (defensive, correct). | `backend/server.py:324-328` | None. |
+
+---
