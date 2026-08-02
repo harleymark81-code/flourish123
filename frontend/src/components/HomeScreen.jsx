@@ -376,6 +376,12 @@ export default function HomeScreen({ onNavigate, pendingFoodName, onPendingFoodC
         }, { headers: getHeaders(), withCredentials: true });
         setCurrentRating(ratingRes.data);
         checkBadges();
+      } else if (lookupRes.data.provider_down) {
+        // Finding 3.A — OFF outage is distinct from product-not-found so users
+        // and ops both see the correct signal.
+        ph.barcodeProviderDown();
+        setBarcodeError(lookupRes.data.message || "The barcode service is down right now. Try searching by name.");
+        setTimeout(() => setBarcodeError(""), 5000);
       } else {
         ph.barcodeScanFailed("product_not_found");
         ph.foodNotFound(barcode);

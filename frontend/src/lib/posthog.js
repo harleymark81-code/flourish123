@@ -75,6 +75,7 @@ export const ph = {
     track("barcode_scanned", { food_name, barcode }),
   barcodeScanFailed: (reason) =>
     track("barcode_scan_failed", { reason }),
+  barcodeProviderDown: () => track("barcode_provider_down"),
   foodSearched: (query) => track("food_searched", { query }),
   foodNotFound: (query) => track("food_not_found", { query }),
   manualFoodEntryStarted: (barcode) =>

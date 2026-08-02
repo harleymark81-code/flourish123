@@ -142,6 +142,11 @@ export default function FreeScanScreen({ onComplete }) {
         setResult(ratingRes.data);
         ph.scanLimitReached();
         setPhase("result");
+      } else if (lookupRes.data.provider_down) {
+        // Finding 3.A — OFF outage is distinct from product-not-found.
+        ph.barcodeProviderDown();
+        setError(lookupRes.data.message || "The barcode service is down right now. Try searching by name.");
+        setPhase("input");
       } else {
         ph.barcodeScanFailed("product_not_found");
         ph.foodNotFound(barcode);

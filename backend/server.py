@@ -260,6 +260,11 @@ async def lifespan(app: FastAPI):
     await db.cycle_logs.create_index([("user_id", 1), ("period_start", -1)])
     await db.barcode_cache.create_index("barcode", unique=True)
     await db.barcode_cache.create_index("cached_at", expireAfterSeconds=86400)
+    # OFF provider lookup cache (finding 3.B) — separate from barcode_cache
+    # which holds AI ratings. This one caches raw OFF payloads (positive AND
+    # negative results) to insulate us from OFF throttling / outages.
+    await db.off_lookup_cache.create_index("barcode", unique=True)
+    await db.off_lookup_cache.create_index("cached_at", expireAfterSeconds=86400)
     await db.diary.create_index([("user_id", 1), ("date", -1)])
     await db.diary.create_index("scan_id", unique=True, sparse=True)
     # Referral indexes — used by webhook lookup and stats queries
@@ -2354,28 +2359,62 @@ async def admin_activity(request: Request):
 async def lookup_barcode(request: Request, barcode: str, current_user: dict = Depends(get_current_user)):
     if len(barcode) > 50 or not barcode.isalnum():
         raise HTTPException(status_code=400, detail="Invalid barcode format")
+
+    # ── OFF lookup cache (finding 3.B) ─────────────────────────────────────
+    # Cache both positive AND negative results with a 24h TTL to insulate us
+    # from OpenFoodFacts throttling and to avoid repeatedly hitting OFF for
+    # products it doesn't have. Provider-down responses are NOT cached (they
+    # are transient — see except-block below).
+    try:
+        cached = await db.off_lookup_cache.find_one({"barcode": barcode})
+        if cached and cached.get("data"):
+            return cached["data"]
+    except Exception as ce:
+        logger.warning(f"OFF cache read error: {ce}")
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"https://world.openfoodfacts.org/api/v0/product/{barcode}.json")
             data = resp.json()
 
         if data.get("status") != 1:
-            return {"found": False, "message": "Product not found in our database. Try searching by name instead."}
+            payload = {"found": False, "message": "Product not found in our database. Try searching by name instead."}
+        else:
+            product = data.get("product", {})
+            ingredients = product.get("ingredients_text", "") or product.get("ingredients_text_en", "")
+            image_url = product.get("image_url", "") or product.get("image_front_url", "")
+            payload = {
+                "found": True,
+                "name": product.get("product_name", "") or product.get("product_name_en", "Unknown Product"),
+                "ingredients": ingredients[:500] if ingredients else "",
+                "image_url": image_url,
+                "barcode": barcode,
+            }
 
-        product = data.get("product", {})
-        ingredients = product.get("ingredients_text", "") or product.get("ingredients_text_en", "")
-        image_url = product.get("image_url", "") or product.get("image_front_url", "")
+        # Cache the OFF response (positive or negative). Best-effort write —
+        # a cache failure must never break the user-facing lookup.
+        try:
+            await db.off_lookup_cache.update_one(
+                {"barcode": barcode},
+                {"$set": {"barcode": barcode, "data": payload, "cached_at": datetime.now(timezone.utc)}},
+                upsert=True,
+            )
+        except Exception as ce:
+            logger.warning(f"OFF cache write error: {ce}")
 
-        return {
-            "found": True,
-            "name": product.get("product_name", "") or product.get("product_name_en", "Unknown Product"),
-            "ingredients": ingredients[:500] if ingredients else "",
-            "image_url": image_url,
-            "barcode": barcode
-        }
+        return payload
+
     except Exception as e:
-        logger.error(f"Barcode lookup error: {e}")
-        return {"found": False, "message": "Could not fetch product data. Try searching by name."}
+        # Finding 3.A — distinguish OFF outage / timeout from "product not in
+        # DB". Frontend needs a distinct signal so it can (a) show a
+        # provider-down message and (b) fire the ph.barcodeProviderDown event
+        # instead of a generic barcodeScanFailed('network_error').
+        logger.error(f"Barcode lookup error (provider): {e}")
+        return {
+            "found": False,
+            "provider_down": True,
+            "message": "OpenFoodFacts is unreachable right now. Please try searching by name.",
+        }
 
 # ── FAVOURITES ────────────────────────────────────────────────────────────────
 @api_router.get("/favourites")
