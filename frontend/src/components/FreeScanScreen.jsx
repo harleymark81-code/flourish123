@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, Camera } from "lucide-react";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { ph } from "../lib/posthog";
+import BarcodeScanner from "./BarcodeScanner";
 
 // ── Condition-specific data ────────────────────────────────────────────────────
 
@@ -84,6 +85,7 @@ export default function FreeScanScreen({ onComplete }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [loadMsgIdx, setLoadMsgIdx] = useState(0);
+  const [showScanner, setShowScanner] = useState(false);
   const intervalRef = useRef(null);
 
   const conditions = user?.conditions || [];
@@ -115,6 +117,42 @@ export default function FreeScanScreen({ onComplete }) {
     } catch (e) {
       const msg = e.response?.data?.detail;
       setError(typeof msg === "string" ? msg : "Could not rate this food. Please try again.");
+      setPhase("input");
+    }
+  };
+
+  // Mirrors HomeScreen.handleBarcodeResult — routes barcode scans through the
+  // same /food/rate endpoint so free-scan consumption is handled server-side
+  // in the same code path as the text search above.
+  const handleBarcodeResult = async (barcode) => {
+    setShowScanner(false);
+    setPhase("loading");
+    setError("");
+    try {
+      const lookupRes = await axios.get(`${API}/food/barcode/${barcode}`, { headers: getHeaders() });
+      if (lookupRes.data.found) {
+        const { name, ingredients, image_url } = lookupRes.data;
+        ph.barcodeScanned(name, barcode);
+        const ratingRes = await axios.post(`${API}/food/rate`, {
+          food_name: name,
+          ingredients,
+          barcode,
+          product_image: image_url,
+        }, { headers: getHeaders(), withCredentials: true });
+        setResult(ratingRes.data);
+        ph.scanLimitReached();
+        setPhase("result");
+      } else {
+        ph.barcodeScanFailed("product_not_found");
+        ph.foodNotFound(barcode);
+        setError(lookupRes.data.message || "Product not found. Try searching by name.");
+        setPhase("input");
+      }
+    } catch (e) {
+      ph.barcodeScanFailed("network_error");
+      ph.apiError("/food/barcode", e.message, e.response?.status);
+      const msg = e.response?.data?.detail;
+      setError(typeof msg === "string" ? msg : "Couldn't look up that barcode. Please try again.");
       setPhase("input");
     }
   };
@@ -161,6 +199,26 @@ export default function FreeScanScreen({ onComplete }) {
             ))}
           </div>
 
+          <motion.button
+            data-testid="free-scan-barcode-btn"
+            whileTap={{ scale: 0.97 }}
+            onClick={() => { setShowScanner(true); ph.barcodeScannerOpened(); }}
+            style={{
+              width: "100%", border: "none", borderRadius: 14, padding: "16px 20px",
+              fontSize: 15, fontWeight: 700, cursor: "pointer",
+              background: `linear-gradient(135deg, ${PRI}, #756AD9)`,
+              color: "#fff", boxShadow: "0 4px 20px rgba(83,74,183,0.30)",
+              marginBottom: 12, minHeight: 54,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            }}>
+            <Camera size={18} color="#fff" />
+            Scan a barcode
+          </motion.button>
+
+          <p style={{ fontSize: 12, color: S, textAlign: "center", margin: "0 0 12px", fontWeight: 500 }}>
+            — or search by name —
+          </p>
+
           <input
             value={foodName}
             onChange={e => setFoodName(e.target.value)}
@@ -193,6 +251,11 @@ export default function FreeScanScreen({ onComplete }) {
           </motion.button>
         </motion.div>
       </div>
+
+      {/* Barcode scanner — mounted here so it overlays the input phase */}
+      <AnimatePresence>
+        {showScanner && <BarcodeScanner onResult={handleBarcodeResult} onClose={() => setShowScanner(false)} />}
+      </AnimatePresence>
     </div>
   );
 
