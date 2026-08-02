@@ -169,6 +169,67 @@ Backend — `update_profile` (server.py:729), `get_daily_tip` (server.py:1164),
 
 ---
 
+## Section 6 — Email / Resend
+
+**Scope:** every transactional email template, every caller, all three email crons,
+idempotency, copy accuracy, silent-failure observability.
+
+**Functions audited:**
+Service layer — `_send_sync` (services/email.py:36), `send_email` (services/email.py:53),
+`_wrap` (services/email.py:69), `_btn/_h1/_p/_divider/_highlight_box/_check_list/_lock_list`,
+and 11 template senders: `send_welcome_email` (:171), `send_subscription_confirmed_email`
+(:189), `send_trial_ending_email` (:220), `send_scan_limit_email` (:249),
+`send_referral_reward_email` (:273), `send_password_reset_email` (:294),
+`send_weekly_report_email` (:309), `send_support_email` (:381),
+`send_reengagement_email` (:395), `send_affiliate_application_email` (:447),
+`send_cancellation_email` (:490).
+Callers — `register` (server.py:663), `support_contact` (server.py:763-774),
+`rate_food` free-scan consume (server.py:1156-1159),
+`stripe_webhook` handlers (server.py:1807, 1831, 1879, 1937),
+`affiliate_apply` (server.py:2107-2118), `forgot_password` (server.py:2642-2650).
+Crons — `_send_weekly_reports` (server.py:106-141) `sun 09:00 UTC`,
+`_send_reengagement_emails` (server.py:144-146) `daily 10:00 UTC`,
+`_send_trial_ending_emails` (server.py:149-180) `daily 09:00 UTC`.
+
+**Config:** `RESEND_API_KEY` env var (services/email.py:38, read on every send);
+`FROM_ADDRESS = "Flourish <hello@mail.theflourishapp.health>"`;
+`REPLY_TO = "hello@theflourishapp.health"`;
+`FRONTEND_URL = "https://theflourishapp.health"` (hardcoded, non-www).
+
+**Idempotency status:**
+- `trial_ending_email_sent` flag guards trial-end cron + `trial_will_end` webhook (both writers).
+- `reengagement_email_sent` flag guards reengagement cron (single writer).
+- `send_password_reset_email` — awaited, no idempotency (tokens themselves are one-use).
+- **NO idempotency on:** welcome, subscription-confirmed, scan-limit, referral reward,
+  cancellation, weekly report, support, affiliate application.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 6.A | 🟡 | Startup does not verify `RESEND_API_KEY`. If key is missing/rotated on Railway, every subsequent email silently drops with only a per-call `logger.warning`; the deployer sees a running app and no user complaints for hours. | `backend/server.py:253-346` (lifespan) + `backend/services/email.py:38-41` | Add `if not os.environ.get("RESEND_API_KEY","").strip(): logger.error("[startup] RESEND_API_KEY not set — all outbound email will fail")` at lifespan startup. Optional: probe with `resend.Domains.list()` or a lightweight self-send at startup. |
+| 6.B | 🟡 | `send_scan_limit_email` fires on every write of the free-scan-consumed block with no idempotency flag. Combined with 2.D's double-spend race → same user emailed twice. Also, any manual DB reset of `has_used_free_scan` sends a second email. | `backend/server.py:1147-1159` | Bundle into 2.D's atomic reservation: `find_one_and_update({..., "scan_limit_email_sent":{"$ne":True}}, {"$set":{...,"scan_limit_email_sent":True}})`; only send if the pre-update doc did not already have the flag. |
+| 6.C | 🟡 | Weekly report cron (`_send_weekly_reports`) has NO per-user-per-week idempotency AND awaits Resend serially. At ~1000+ users the loop runs for minutes, blocks other scheduler jobs on the same event loop, and if Resend returns 429 mid-loop the run partially completes with no retry. Any container restart between 08:59 and 09:00 UTC that recovers within APScheduler's `misfire_grace_time` (default 1s) → cron fires; if already fired that Sunday it won't refire, but a horizontally-scaled deployment would fire once per instance → N× emails per user. | `backend/server.py:106-141` | (1) Add `weekly_report_sent_yyyy_ww:True` marker per user (or an ISO-week entry in a `cron_runs` collection). (2) Batch with `asyncio.gather(*chunk, return_exceptions=True)` + `asyncio.Semaphore(10)` to bound concurrency. (3) Confirm Railway is single-instance before launch. |
+| 6.D | 🟠 | Trial-ending email dual-send race — cron (server.py:159-179) and webhook `customer.subscription.trial_will_end` (server.py:1825-1840) each `find_one({..., "trial_ending_email_sent":{"$ne":True}})` then `update_one` in **separate** operations. Two overlapping executions both pass the check, both send, both mark True. Duplicate emails. | `backend/server.py:159-179` and `1825-1840` | Use atomic `find_one_and_update({"_id":ObjectId(uid),"trial_ending_email_sent":{"$ne":True}}, {"$set":{"trial_ending_email_sent":True}}, return_document=False)`; if pre-update doc is None, another writer already claimed it — do NOT send. |
+| 6.E | 🟠 | `forgot_password` **awaits** `send_password_reset_email` before returning. Resend degradation or outage blocks the response for the full Resend SDK timeout (default ~30s). Enumeration-safe response text is identical either way — no reason to block on the send. | `backend/server.py:2642-2650` | `asyncio.create_task(send_password_reset_email(...))` and return immediately. Log the failure inside the task. |
+| 6.F | 🟠 | `/support/contact` has NO `@limiter.limit(...)` decorator. An authenticated user can flood `hello@theflourishapp.health` with up to 2000-char messages, subject 200 chars, unbounded rate. No PostHog signal on abuse. | `backend/server.py:763-774` | Add `@limiter.limit("5/hour")` and a per-user daily counter (`support_msgs_today` with UTC-date reset) capping at ~10/day. |
+| 6.G | 🟠 | `send_support_email` (services/email.py:381-390) interpolates `user_name`, `user_email`, `subject`, and `message` UNESCAPED into the HTML body sent to the admin inbox. Attacker-controlled name/subject can break rendering, spoof "From:" line visually, or embed misleading markup. Email clients strip `<script>` so no XSS — trust-boundary/UX issue only. `send_affiliate_application_email` already uses `html.escape` correctly; this endpoint doesn't. | `backend/services/email.py:381-390` | `from html import escape as _esc`; wrap every interpolated user field: `_esc(user_name or "Unknown")`, `_esc(user_email)`, `_esc(subject)`, `_esc(message)`. Match the pattern used at services/email.py:457-465. |
+| 6.H | 🟠 | `send_referral_reward_email` and every other name-personalised email (welcome, subscription-confirmed, trial-ending, scan-limit, cancellation, weekly-report, reengagement) interpolates `first = name.split()[0]` UNESCAPED into HTML. Attacker sets their own display name to markup; email is sent to the REFERRER (not attacker) — attacker can hide the pitch text, spoof the referrer's real name, or insert misleading tags. No XSS in modern clients, but real spoofing surface for the referral flow. | `backend/services/email.py:172`, `190`, `221`, `250`, `274-275`, `295`, `317`, `422`, `491` | Escape every `first`/`first_name`/`referred_first`/`referrer_first` via `html.escape` at the point of interpolation. Register a helper `_safe(name)` in email.py. |
+| 6.I | 🟠 | Reengagement cron sends serially with no concurrency cap and no per-day send limit. Resend's free tier is 100 emails/day; at 100+ abandoned users the daily run partially succeeds, unsuccessful sends never mark `reengagement_email_sent:True` (correct per the code), and the same users retry every day — but always cap out at 100. Throughput never catches up beyond ~100. | `backend/services/email.py:395-440` | (1) Verify Resend plan tier is above free before launch (paid = 3000/mo minimum). (2) `asyncio.Semaphore(5)` around `send_email` inside the loop. (3) `MAX_REENGAGEMENT_PER_DAY` env cap with resume-cursor semantics. |
+| 6.J | 🟠 (**recap of 5.D**) | Cancellation email fires on every `customer.subscription.deleted` webhook delivery with no idempotency. Stripe re-delivery → duplicate cancellation emails. | `backend/server.py:1877-1883` | `find_one_and_update({..., "cancellation_email_sent":{"$ne":True}}, {"$set":{"cancellation_email_sent":True}})` before sending. Same shape as 5.D and 6.D. |
+| 6.K | 🟠 (**recap of 5.A**) | Immediate-unlock path (server.py:1614-1682) grants premium but does NOT send `send_subscription_confirmed_email` and does NOT `_ph_capture("subscription_started", ...)`. Only the webhook path does. If Stripe webhook is misconfigured (5.B trailing-slash) or its endpoint secret is wrong, users pay, get access, but never receive confirmation and never appear in conversion analytics. | `backend/server.py:1614-1682` (missing) vs `1804-1812` (has both) | Copy the email + PostHog block into immediate-unlock, guarded by `confirmation_email_sent:True` compare-and-set on `payment_transactions`. |
+| 6.L | 🟠 | Every fire-and-forget email caller discards the `bool` returned by `send_email`. Silent failures — no PostHog event, no counter, no alert. Ops only learns of email outages via user complaints or manual log inspection. | Every `asyncio.create_task(send_*_email(...))` site: server.py:663, 766, 1156, 1807, 1830-1840, 1879, 1937, 2107 | Inside `services/email.py:53-64`, emit `_ph_capture("system", "email_send_failed", {"subject":subject,"reason":str(exc)})` on the False/exception branch. Add a Prometheus/PostHog counter `email.sent` / `email.failed`. |
+| 6.M | 🟢 | `_send_sync` re-reads `RESEND_API_KEY` from `os.environ` and re-sets `resend.api_key` on every call. Redundant, but cheap and stateless. | `backend/services/email.py:38-42` | Cache at module load: `_API_KEY = os.environ.get("RESEND_API_KEY","").strip()`. |
+| 6.N | 🟢 | `send_reengagement_email` subject-line builder interpolates raw `first_name`. If DB name contains CR/LF characters, Resend may reject the request as header-injection; if it accepts, the extra whitespace could mangle the subject in some clients. Pydantic Name validator should reject control chars but there's no explicit check. | `backend/services/email.py:433` | Sanitize before subject build: `first = first.replace("\r","").replace("\n","").strip()[:80]`. |
+| 6.O | 🟢 | Password reset link uses `FRONTEND_URL` env override defaulting to `https://theflourishapp.health` (non-www). www users get bounced cross-origin after reset — potential cookie loss (same class as 5.H). | `backend/server.py:2640-2641` and `backend/services/email.py:23` | Consolidate to a single `frontend_url()` helper that derives from `Origin` header where available, else env, else default. |
+| 6.P | 🟢 | Weekly report copy: red_foods empty branch renders "None this week -- great work!" — but empty could also mean "user only logged 3 items and none were <40" or "user logged nothing worth flagging." Slight overclaim on light-usage weeks. | `backend/services/email.py:334` | Change copy to "No low-scoring foods logged this week." |
+| 6.Q | 🟢 | `send_scan_limit_email` closer copy "Less than 43p a day. Less than one coffee a week." maps to the MONTHLY plan (£12.99/30 ≈ 43.3p/day). Correct for monthly; misleading if the app's CTA leads with annual (£49.99/yr ≈ 13.7p/day). Marketing decision. | `backend/services/email.py:266` | Align copy with primary in-app CTA; consider "From 14p/day on annual, less than 43p/day monthly." |
+| 6.R | 🟢 | Hardcoded admin inbox strings: `theflourishfoodapp@gmail.com` (server.py:2109) and `hello@theflourishapp.health` (server.py:767). Fine for launch; moves the surface into code review for any rebrand. | `backend/server.py:766-772` and `2107-2118` | Env-driven: `ADMIN_INBOX` and `SUPPORT_INBOX`. |
+| 6.S | 🟢 | `FRONTEND_URL` is duplicated between `backend/services/email.py:23` (hardcoded) and `backend/server.py:2640` (env-driven). Two sources of truth → future drift. | `backend/services/email.py:23`, `backend/server.py:2640` | Read env in email.py at module init: `FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")`. |
+| 6.T | 🟢 | Unsubscribe link in email footer (`_wrap`, services/email.py:104) points to `FRONTEND_URL` (`https://theflourishapp.health`) — same as the main app link. There is no actual unsubscribe endpoint. If a user clicks "Unsubscribe" expecting to opt out, they land on the app and remain subscribed to transactional email. Compliance concern once you send marketing (weekly report is arguably marketing). | `backend/services/email.py:103-104` | Add a real unsubscribe endpoint that flips a `marketing_opt_out:True` flag; gate weekly report + reengagement on `marketing_opt_out !== True`. Transactional emails (welcome, subscription confirmed, password reset, cancellation) can ignore the flag. |
+
+---
+
 ## Section 5 — Stripe
 
 **Scope:** checkout session creation, immediate-unlock path, webhook signature +
@@ -225,3 +286,48 @@ guaranteed. Only gap: poll path skips confirmation email + PostHog track (see 5.
 
 
 
+
+## Section 7 — Referral System
+
+**Scope:** referral code generation and uniqueness, self-referral guard,
+plus-address / multi-account fraud, 12-reward cap, reward grant path,
+referral-trial (14-day) logic, referral stats endpoints, frontend link capture.
+
+**Functions audited:**
+Backend — `register` referral tracking (server.py:629-656),
+`create_checkout` referral-trial gating (server.py:1567-1587),
+`get_payment_status` extended-trial (server.py:1653-1672),
+`stripe_webhook checkout.session.completed` referral-trial mark
+(server.py:1779-1802), `stripe_webhook invoice.payment_succeeded` reward grant
++ cap enforcement (server.py:1904-1950), `get_referral_stats`
+(server.py:2029-2060), `get_referrals_stats` (server.py:2062-2081).
+Frontend — App.js `?ref=` capture (App.js:125-137), `AuthContext.register`
+referral payload (AuthContext.js:52-77), `ProfileScreen` referral link
+(ProfileScreen.jsx:216-238), `AffiliateDashboard` (AffiliateDashboard.jsx:9).
+
+**Config:** Referral code = `str(uuid.uuid4())[:8].upper()` — 8 hex chars
+uppercased = 32 bits ≈ 4.29B combinations. Sparse (NOT unique) index at
+server.py:266. Reward: +30 days per paying referral. Cap: 12 rewards per
+referrer. Trial extension: 14 days (vs standard 3/7) for referred users.
+
+### Findings
+
+| # | Severity | Finding | File:line | Fix |
+|---|---|---|---|---|
+| 7.A | 🔴 | **Referral code case-mismatch silently kills every lowercase referral.** `register` stores `referred_by` as-received (server.py:630 — no `.upper()`); `referral_code` is stored uppercased at generation (server.py:629, 2038, 2067); webhook lookup `db.users.find_one({"referral_code": ref_code})` at server.py:1917 uses the referred user's raw stored `referred_by`. If the invitee's URL was `?ref=abc123` (lowercased manually, or via a URL-shortener that normalises case), the DB write stores `abc123`, the referrer's `referral_code` is `ABC123`, and the lookup returns None. Referrer gets nothing; user gets no error; no log. Also affects `affiliate_applications.update_one` at server.py:654. | `backend/server.py:630` (register), `server.py:654` (affiliate app signups), `server.py:1917` (webhook lookup), `frontend/src/App.js:129-137` (URL capture, no `.toUpperCase()`), `frontend/src/context/AuthContext.js:55-67` | Normalise everywhere: `.upper().strip()` on `referred_by` at register, on URL-captured ref in App.js, and on the webhook lookup. Consider adding a unique-partial-index constraint on `referral_code` to catch collisions. |
+| 7.B | 🔴 | **Referral code index is `sparse` but NOT `unique`.** With `uuid.uuid4()[:8]` (32 bits) the birthday-collision probability is ~50% around 77k users. On collision, `find_one({"referral_code": X})` returns the FIRST match — silently attributing rewards to the wrong user. Lazy-generation paths (server.py:2038, 2067) don't check for existing codes at all. | `backend/server.py:266` (`create_index("referral_code", sparse=True)` — missing `unique=True`) | Change to `unique=True, sparse=True`. Add retry-on-duplicate loop in `register` and both lazy-generation paths. Consider widening the code (12 chars ≈ 48 bits) to push collision horizon well beyond target user base. |
+| 7.C | 🟡 | **Plus-address referral farming.** Self-referral check at server.py:1920 (`referrer.get("email") != claim.get("email")`) compares raw emails. `user@gmail.com` and `user+1@gmail.com` are the same Gmail inbox but distinct DB rows → attacker creates infinite "referred" accounts from a single mailbox, each earns them +30 days (capped at 12 = 12 free months = £155.88 value). No CAPTCHA, no phone/card fingerprint. | `backend/server.py:1920` and `604-644` (register — no dedupe on normalised email) | Normalise on register: strip Gmail plus-addressing (`local.split("+")[0]` for `@gmail.com`, `@googlemail.com`) and lowercase the domain, then unique-check the normalised email. Alternatively: gate referral rewards behind first successful payment on a distinct Stripe `payment_method.fingerprint` from the referrer's own methods. |
+| 7.D | 🟡 | **`/referral/stats` returns commission fields** (`monthly_commission`, `annual_commission`, `total_commission` at server.py:2057-2059) despite the user-referral system paying in FREE MONTHS, not cash commission. If any UI surfaces these fields, users expect £ payouts — leads to support tickets and potential misrepresentation claims. `/referrals/stats` (server.py:2062) is the clean version and returns only free-month counts. | `backend/server.py:2029-2060` | Delete `/referral/stats` or strip the three commission fields. Confirm no frontend depends on the commission values (grep for `monthly_commission`, `total_commission` in frontend/src). |
+| 7.E | 🟡 | **Referral trial (14-day) check is against stale `current_user`.** `create_checkout` reads `current_user.get("referral_trial_claimed")` from the request-time snapshot (server.py:1571-1575). Between two rapid checkout creations, the first hasn't yet marked the flag (marked only after webhook/poll upgrade at server.py:1798/1672). Attacker abandons checkout #1 → creates checkout #2, both get 14-day trial metadata. First to pay wins the mark; second orphan carries the 14-day trial too. Downside limited (only ONE subscription actually completes) but the metadata inconsistency could confuse trial-ending logic. | `backend/server.py:1571-1587` | Read `is_trialing`/`referral_trial_claimed` via a fresh `db.users.find_one` inside `create_checkout` right before the Stripe call, or gate on an atomic reservation of `referral_trial_claimed`. |
+| 7.F | 🟠 | **`referral_count` grows past the 12-reward cap** (server.py:1943-1947 increments even when `>=12`). `/referrals/stats` returns the raw count — a user who referred 25 people sees "referred 25, rewarded 12" only if the UI knows to display "rewarded" separately. Otherwise UX suggests they earned 25 rewards. | `backend/server.py:1943-1947` (unbounded increment) + `2079` (stats returns raw count) | Either stop incrementing past 12, or add a separate `referral_reward_count` capped at 12 while `referral_count` tracks total. UI should display both explicitly. |
+| 7.G | 🟠 | **`referred_by` field has no validation beyond `max_length=20`** (server.py:483). Attacker can POST `referred_by="<script>alert(1)</script>"` at register — stored raw in DB, later included in emails (see 6.H) and in log lines (server.py:651 `logger.info(f"[register] referred_by={data.referred_by}...")` — potential log-injection with `\n[fake] ...`). | `backend/server.py:483` (Pydantic model) | Tighten regex: `Field(default=None, pattern=r"^[A-Z0-9]{6,12}$")`; sanitise the value before including in logger.info. |
+| 7.H | 🟠 | **Referral link on ProfileScreen hardcodes `https://theflourishapp.health`** (ProfileScreen.jsx:219) instead of using the backend-returned `referral_link`. If FRONTEND_URL changes or user views on www subdomain, the copy-to-clipboard link may not match the canonical form. | `frontend/src/components/ProfileScreen.jsx:216-219` | Use the `referral_link` field returned by `/referral/stats` or `/referrals/stats`. Consolidates with 5.H/6.O. |
+| 7.I | 🟠 | **Anonymous referral tracking dies on localStorage eviction.** `?ref=X` is stored in `localStorage.fl_ref` (App.js:131) awaiting a later signup. Incognito browsing, browser storage pressure, or manual clear → attribution lost. No cookie fallback, no server-side click tracking. | `frontend/src/App.js:125-137` | Add a first-party cookie fallback with 30-day expiry; server-side POST `/referral/click` on landing that logs `{ref_code, timestamp, ip_hash}` for later reconciliation. |
+| 7.J | 🟠 | **Ghost referral**: if the referrer account is DELETED (server.py:2611 `delete_account`) after a referral was captured but before the referred user pays, the webhook `find_one({"referral_code": ref_code})` returns None (server.py:1917), the reward silently drops, and the referred user still gets the 14-day trial. Not a bug, but no PostHog signal on this path. | `backend/server.py:1916-1917` | Log `logger.warning("Referral code %s has no owner (ghost referral)", ref_code)` and fire `_ph_capture("system","ghost_referral",{...})` for ops visibility. |
+| 7.K | 🟢 | **Two overlapping stats endpoints** (`/referral/stats` and `/referrals/stats`) return different-shaped data with overlapping fields. Frontend must know which to call. Refactor risk when one is deleted (7.D). | `backend/server.py:2029` and `2062` | Consolidate to one endpoint returning `{code, link, paying_referrals, free_months_earned, cap_remaining}`. |
+| 7.L | 🟢 | **Reward calculation independent of plan.** Referred user paying £49.99 (annual) grants referrer +30 days, same as £12.99 (monthly). Simplification — likely intentional. Note only. | `backend/server.py:1929` (`base + timedelta(days=30)`) | None (product decision). |
+| 7.M | 🟢 | **`use_referral_trial` doesn't distinguish first-payment from re-checkout after cancel.** A user who cancelled a subscription then re-checks-out will still get 14-day trial if their `referral_trial_claimed` was never set (webhook may have failed originally). Rare, harmless (worst case: an extra free week for someone already known to churn). | `backend/server.py:1571-1577` | None. |
+| 7.N | 🟢 | **Frontend clears `fl_ref` on register** (AuthContext.js:76) — good hygiene, prevents cross-account leakage on same-device signup. Note only. | `frontend/src/context/AuthContext.js:76-77` | None. |
+| 7.O | 🟢 | **`payment_transactions.referral_code` set at checkout creation** to the referred user's `referred_by` (server.py:1602). `/referral/stats` count of `paying_referrals` filters on `payment_status="paid"`, so abandoned trials don't inflate the count. Consistent with `referral_count` on webhook path. | `backend/server.py:1593-1604` + `2044-2050` | None. |
+
+---
