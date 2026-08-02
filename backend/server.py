@@ -254,6 +254,29 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     # ── Startup ──
     await db.users.create_index("email", unique=True)
+    # Finding 7.C — unique+sparse index on the normalised email_key so a
+    # race between two simultaneous plus-address signups is caught at the
+    # DB layer (register also does an application-level find_one check).
+    # Defensive: skip unique if legacy dups exist.
+    _key_dup_pipeline = [
+        {"$match": {"email_key": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": "$email_key", "count": {"$sum": 1}}},
+        {"$match": {"count": {"$gt": 1}}},
+        {"$limit": 1},
+    ]
+    try:
+        _key_has_dup = await db.users.aggregate(_key_dup_pipeline).to_list(1)
+        if _key_has_dup:
+            logger.warning("[startup] email_key has existing duplicates — keeping index sparse-only")
+            await db.users.create_index("email_key", sparse=True)
+        else:
+            try:
+                await db.users.drop_index("email_key_1")
+            except Exception:
+                pass
+            await db.users.create_index("email_key", unique=True, sparse=True)
+    except Exception as _e:
+        logger.error(f"[startup] email_key index migration failed: {_e}")
     await db.login_attempts.create_index("identifier")
     await db.favourites.create_index([("user_id", 1), ("food_name", 1)])
     await db.shopping_list.create_index("user_id")
@@ -637,8 +660,13 @@ async def register(request: Request, data: RegisterRequest):
 
     logger.info(f"[register] attempt email={email} password_len={len(data.password)} name={repr(data.name)}")
 
-    if await db.users.find_one({"email": email}):
-        logger.info(f"[register] rejected — email already registered: {email}")
+    # Finding 7.C — dedup on the normalised email key too, so Gmail
+    # plus-addressing (`user+1@gmail.com`) and dot-alias (`user.name@gmail.com`)
+    # can't farm multiple accounts from a single inbox for referral rewards.
+    email_key = _normalize_email_key(email)
+    existing = await db.users.find_one({"$or": [{"email": email}, {"email_key": email_key}]})
+    if existing:
+        logger.info(f"[register] rejected — email or normalised key already registered: {email}")
         raise HTTPException(status_code=400, detail="Email already registered")
 
     # Finding 7.A — normalise referral code on write so webhook / affiliate
@@ -649,6 +677,7 @@ async def register(request: Request, data: RegisterRequest):
 
     user_doc = {
         "email": email,
+        "email_key": email_key,
         "password_hash": hash_password(data.password),
         "name": data.name or email.split("@")[0],
         "role": "user",
@@ -829,6 +858,32 @@ async def get_profile_stats(current_user: dict = Depends(get_current_user)):
         "has_used_free_scan": has_used_free_scan,
         "free_scan_available": not has_used_free_scan and not effective_premium,
     }
+
+def _normalize_email_key(email: str) -> str:
+    """Finding 7.C — canonical form of email for dedup / self-referral checks.
+
+    - Lowercase entire address.
+    - For gmail.com / googlemail.com: strip dots and plus-addressing from
+      the local part, canonicalise domain to gmail.com. Gmail treats
+      `harley.mark+x@gmail.com` and `harleymark@gmail.com` as the same
+      inbox but our DB was storing them as distinct rows — attacker
+      could farm 12 referral rewards from a single mailbox.
+
+    Other domains: only strip plus-addressing (many providers respect it).
+    The user's DISPLAYED email is unchanged; this key is used only for
+    dedup on register and equality checks in the webhook.
+    """
+    e = (email or "").strip().lower()
+    if "@" not in e:
+        return e
+    local, domain = e.rsplit("@", 1)
+    if domain in ("gmail.com", "googlemail.com"):
+        local = local.split("+", 1)[0].replace(".", "")
+        domain = "gmail.com"
+    else:
+        local = local.split("+", 1)[0]
+    return f"{local}@{domain}"
+
 
 async def _generate_unique_referral_code(max_attempts: int = 5) -> str:
     """Finding 7.B — pre-check helper that avoids uuid4-truncation collisions.
@@ -1972,7 +2027,10 @@ async def stripe_webhook(request: Request):
                                 {"referral_code": ref_code},
                                 {"_id": 1, "email": 1, "name": 1, "premium_expires_at": 1, "referral_count": 1}
                             )
-                            if referrer and referrer.get("email") != claim.get("email"):
+                            # Finding 7.C — compare normalised email keys so
+                            # Gmail plus-address / dot-alias variants are
+                            # correctly treated as self-referral.
+                            if referrer and _normalize_email_key(referrer.get("email", "")) != _normalize_email_key(claim.get("email", "")):
                                 if referrer.get("referral_count", 0) < 12:
                                     current_expiry = referrer.get("premium_expires_at")
                                     try:
