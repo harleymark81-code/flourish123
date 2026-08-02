@@ -916,6 +916,7 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     uid = current_user.get("id") or current_user.get("_id")
     today = datetime.now(timezone.utc).date().isoformat()
 
+    # ── Gate: free users get exactly one scan; premium/admin unlimited ─────
     is_free_scan = False
     if not _effective_premium(current_user):
         if current_user.get("has_used_free_scan", False):
@@ -925,57 +926,36 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
             )
         is_free_scan = True
 
-    # ── 24h barcode cache check ────────────────────────────────────────────────
+    rating_data = None
+    from_cache = False
+
+    # ── 24h barcode cache check ─────────────────────────────────────────────
     if data.barcode:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         cached = await db.barcode_cache.find_one({"barcode": data.barcode})
         if cached and cached.get("cached_at") and cached["cached_at"] > cutoff:
-            result = dict(cached["rating_data"])
-            result["product_image"] = data.product_image or cached["rating_data"].get("product_image", "")
-            result["rated_at"] = datetime.now(timezone.utc).isoformat()
-            result["user_id"] = uid
-            result["date"] = today
-            result["id"] = str(uuid.uuid4())
-            result["from_cache"] = True
+            rating_data = dict(cached["rating_data"])
+            rating_data["product_image"] = data.product_image or cached["rating_data"].get("product_image", "")
+            rating_data["rated_at"] = datetime.now(timezone.utc).isoformat()
+            rating_data["user_id"] = uid
+            rating_data["date"] = today
+            rating_data["id"] = str(uuid.uuid4())
+            rating_data["from_cache"] = True
+            from_cache = True
             logger.info(f"Barcode cache hit: {data.barcode}")
-            # Save to diary so scan limit, stats, and badges all update correctly
-            scan_id = result["id"]
-            try:
-                await db.diary.update_one(
-                    {"scan_id": scan_id},
-                    {"$setOnInsert": {
-                        "scan_id": scan_id,
-                        "user_id": uid,
-                        "food_name": result.get("food_name") or result.get("name", data.food_name),
-                        "overall_score": result.get("overallScore", 0),
-                        "verdict": result.get("verdict", ""),
-                        "dimensions": result.get("dimensions"),
-                        "flags": result.get("flags"),
-                        "forYourCondition": result.get("forYourCondition", ""),
-                        "alternatives": result.get("alternatives"),
-                        "bodySystemsAffected": result.get("bodySystemsAffected"),
-                        "barcode": data.barcode or "",
-                        "product_image": data.product_image or "",
-                        "date": today,
-                        "logged_at": datetime.now(timezone.utc).isoformat(),
-                        "note": "",
-                    }},
-                    upsert=True
-                )
-            except Exception as de:
-                logger.warning(f"Diary auto-save error (cache hit): {de}")
-            return result
 
-    conditions = current_user.get("conditions", [])
-    goals = current_user.get("goals", [])
-    managing_duration = current_user.get("managing_duration", "")
-    food_challenge = current_user.get("food_challenge", "")
+    # ── AI rating (only when no cache hit) ─────────────────────────────────
+    if rating_data is None:
+        conditions = current_user.get("conditions", [])
+        goals = current_user.get("goals", [])
+        managing_duration = current_user.get("managing_duration", "")
+        food_challenge = current_user.get("food_challenge", "")
 
-    severity = current_user.get("severity", "")
-    medications = current_user.get("medications", "")
-    current_symptoms = current_user.get("current_symptoms", [])
+        severity = current_user.get("severity", "")
+        medications = current_user.get("medications", "")
+        current_symptoms = current_user.get("current_symptoms", [])
 
-    system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness.
+        system_msg = """You are a nutritional AI advisor specialised in hormonal conditions, autoimmune disease, gut health, and chronic illness.
 
 You rate how HEALTHY AND CLEAN a food is for the user. You do NOT penalise foods for not solving the user's condition on their own. The question you answer is: "Is this a good, healthy food for someone with this condition?" — not "does this food alone fix the condition?"
 
@@ -985,11 +965,11 @@ Condition-specific tailoring is preserved through targeted adjustments (a docume
 
 You MUST return ONLY valid JSON with no markdown, no preamble, no explanation — just the raw JSON object."""
 
-    struggles = current_user.get("struggles", [])
-    diet_style = current_user.get("diet_style", [])
-    primary_goal = current_user.get("goal", "") or (goals[0] if goals else "")
+        struggles = current_user.get("struggles", [])
+        diet_style = current_user.get("diet_style", [])
+        primary_goal = current_user.get("goal", "") or (goals[0] if goals else "")
 
-    user_prompt = f"""Rate this food for a user with the following health profile:
+        user_prompt = f"""Rate this food for a user with the following health profile:
 - Conditions: {', '.join(conditions) if conditions else 'General health'}
 - Severity: {severity if severity else 'not specified'}
 - Current symptoms: {', '.join(current_symptoms) if current_symptoms else 'not specified'}
@@ -1085,96 +1065,100 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
   "bodySystemsAffected": ["<from: Hormones, Gut, Immune, Thyroid, Energy>", ...]
 }}"""
 
-    try:
-        response = await call_anthropic(system_msg, user_prompt, temperature=0)
-
-        response_text = response.strip()
-        if response_text.startswith("```"):
-            parts = response_text.split("```")
-            response_text = parts[1] if len(parts) > 1 else response_text
-            if response_text.startswith("json"):
-                response_text = response_text[4:]
-
-        rating_data = json.loads(response_text)
-        rating_data["product_image"] = data.product_image
-        rating_data["food_name"] = data.food_name
-        rating_data["barcode"] = data.barcode
-        rating_data["rated_at"] = datetime.now(timezone.utc).isoformat()
-        rating_data["user_id"] = uid
-        rating_data["date"] = today
-        rating_data["id"] = str(uuid.uuid4())
-
-        # ── Save to diary (drives scan limit, stats, history, badges) ───────────
+        response_text = ""
         try:
-            await db.diary.update_one(
-                {"scan_id": rating_data["id"]},
-                {"$setOnInsert": {
-                    "scan_id": rating_data["id"],
-                    "user_id": uid,
-                    "food_name": rating_data.get("food_name") or rating_data.get("name", data.food_name),
-                    "overall_score": rating_data.get("overallScore", 0),
-                    "verdict": rating_data.get("verdict", ""),
-                    "dimensions": rating_data.get("dimensions"),
-                    "flags": rating_data.get("flags"),
-                    "forYourCondition": rating_data.get("forYourCondition", ""),
-                    "alternatives": rating_data.get("alternatives"),
-                    "bodySystemsAffected": rating_data.get("bodySystemsAffected"),
-                    "barcode": data.barcode or "",
-                    "product_image": data.product_image or "",
-                    "date": today,
-                    "logged_at": datetime.now(timezone.utc).isoformat(),
-                    "note": "",
+            response = await call_anthropic(system_msg, user_prompt, temperature=0)
+
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                parts = response_text.split("```")
+                response_text = parts[1] if len(parts) > 1 else response_text
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+
+            rating_data = json.loads(response_text)
+            rating_data["product_image"] = data.product_image
+            rating_data["food_name"] = data.food_name
+            rating_data["barcode"] = data.barcode
+            rating_data["rated_at"] = datetime.now(timezone.utc).isoformat()
+            rating_data["user_id"] = uid
+            rating_data["date"] = today
+            rating_data["id"] = str(uuid.uuid4())
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parse error: {e}, response: {response_text[:500]}")
+            raise HTTPException(status_code=500, detail="Failed to parse AI response")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"AI rating error: {e}")
+            raise HTTPException(status_code=500, detail=f"AI rating failed: {str(e)}")
+
+    # ── SHARED EXIT PATH — every code path above lands here ────────────────
+    # Diary auto-save (drives scan limit, stats, history, badges)
+    try:
+        await db.diary.update_one(
+            {"scan_id": rating_data["id"]},
+            {"$setOnInsert": {
+                "scan_id": rating_data["id"],
+                "user_id": uid,
+                "food_name": rating_data.get("food_name") or rating_data.get("name", data.food_name),
+                "overall_score": rating_data.get("overallScore", 0),
+                "verdict": rating_data.get("verdict", ""),
+                "dimensions": rating_data.get("dimensions"),
+                "flags": rating_data.get("flags"),
+                "forYourCondition": rating_data.get("forYourCondition", ""),
+                "alternatives": rating_data.get("alternatives"),
+                "bodySystemsAffected": rating_data.get("bodySystemsAffected"),
+                "barcode": data.barcode or "",
+                "product_image": data.product_image or "",
+                "date": today,
+                "logged_at": datetime.now(timezone.utc).isoformat(),
+                "note": "",
+            }},
+            upsert=True
+        )
+    except Exception as de:
+        logger.warning(f"Diary auto-save error{' (cache hit)' if from_cache else ''}: {de}")
+
+    # Refresh streak — today's diary entry may have advanced it
+    try:
+        await _refresh_streak(current_user)
+    except Exception as se:
+        logger.warning(f"Streak refresh error: {se}")
+
+    # Write to barcode cache — only for fresh AI results; don't rewrite on hit
+    if data.barcode and not from_cache:
+        try:
+            await db.barcode_cache.update_one(
+                {"barcode": data.barcode},
+                {"$set": {
+                    "barcode": data.barcode,
+                    "rating_data": {k: v for k, v in rating_data.items() if k not in ("user_id", "date", "rated_at", "id")},
+                    "cached_at": datetime.now(timezone.utc),
                 }},
                 upsert=True
             )
-        except Exception as de:
-            logger.warning(f"Diary auto-save error: {de}")
+        except Exception as ce:
+            logger.warning(f"Barcode cache write error: {ce}")
 
-        # ── Refresh streak now that today has a logged entry ───────────────────
-        try:
-            await _refresh_streak(current_user)
-        except Exception as se:
-            logger.warning(f"Streak refresh error: {se}")
+    # ── Consume free scan — runs for BOTH cache-hit and cache-miss ─────────
+    # Premium/admin users have is_free_scan=False and are never consumed.
+    # This block appears EXACTLY ONCE and cannot be skipped.
+    if is_free_scan:
+        await db.users.update_one(
+            {"_id": ObjectId(uid)},
+            {"$set": {
+                "has_used_free_scan": True,
+                "free_scan_used_at": datetime.now(timezone.utc).isoformat(),
+                "abandoned": False,
+            }}
+        )
+        asyncio.create_task(send_scan_limit_email(
+            to=current_user.get("email", ""),
+            name=current_user.get("name", ""),
+        ))
 
-        # ── Store in barcode cache ─────────────────────────────────────────────
-        if data.barcode:
-            try:
-                await db.barcode_cache.update_one(
-                    {"barcode": data.barcode},
-                    {"$set": {
-                        "barcode": data.barcode,
-                        "rating_data": {k: v for k, v in rating_data.items() if k not in ("user_id", "date", "rated_at", "id")},
-                        "cached_at": datetime.now(timezone.utc),
-                    }},
-                    upsert=True
-                )
-            except Exception as ce:
-                logger.warning(f"Barcode cache write error: {ce}")
-
-        # Mark free scan as used after a successful rating; record timestamp so
-        # the abandoned-cart job (Resend re-engagement) can find them at 24h.
-        if is_free_scan:
-            await db.users.update_one(
-                {"_id": ObjectId(uid)},
-                {"$set": {
-                    "has_used_free_scan": True,
-                    "free_scan_used_at": datetime.now(timezone.utc).isoformat(),
-                    "abandoned": False,
-                }}
-            )
-            asyncio.create_task(send_scan_limit_email(
-                to=current_user.get("email", ""),
-                name=current_user.get("name", ""),
-            ))
-
-        return rating_data
-
-    except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error: {e}, response: {response_text[:500]}")
-        raise HTTPException(status_code=500, detail="Failed to parse AI response")
-    except Exception as e:
-        logger.error(f"AI rating error: {e}")
-        raise HTTPException(status_code=500, detail=f"AI rating failed: {str(e)}")
+    return rating_data
 
 # ── DAILY TIP ──────────────────────────────────────────────────────────────────
 @api_router.get("/food/daily-tip")
