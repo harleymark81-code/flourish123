@@ -822,7 +822,17 @@ async def update_profile(data: ProfileUpdateRequest, current_user: dict = Depend
         update["appearance_preference"] = data.appearance_preference
     if data.age is not None:
         update["age"] = data.age
-    await db.users.update_one({"_id": ObjectId(current_user["id"] if "id" in current_user else current_user["_id"])}, {"$set": update})
+    uid = current_user.get("id") or current_user.get("_id")
+    await db.users.update_one({"_id": ObjectId(uid)}, {"$set": update})
+    # Finding 9.B — if conditions changed, invalidate the pattern cache so
+    # the user does not continue to see patterns generated for their old
+    # condition profile (cache TTL is 7d / 5 new logs, so it would otherwise
+    # keep serving stale patterns for up to a week after a profile edit).
+    if set(data.conditions or []) != set(current_user.get("conditions", []) or []):
+        try:
+            await db.pattern_cache.delete_one({"user_id": str(uid)})
+        except Exception as pe:
+            logger.warning(f"pattern_cache invalidation failed for {uid}: {pe}")
     return {"success": True}
 
 # ── SUPPORT ────────────────────────────────────────────────────────────────────
@@ -2646,12 +2656,20 @@ async def check_favourite(food_name: str, current_user: dict = Depends(get_curre
 @api_router.get("/scan-history")
 async def get_scan_history(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
-    entries = await db.diary.find(
-        {"user_id": uid},
-        {"food_name": 1, "overall_score": 1, "verdict": 1, "date": 1, "logged_at": 1,
-         "barcode": 1, "product_image": 1, "dimensions": 1, "flags": 1,
-         "forYourCondition": 1, "alternatives": 1, "bodySystemsAffected": 1, "scan_id": 1}
-    ).sort("logged_at", -1).to_list(200)
+    # Finding 9.A — free / cancelled-premium users receive only objective
+    # fields (food_name, overall_score, date). Personalised narrative
+    # (dimensions, forYourCondition, alternatives, bodySystemsAffected,
+    # flags) is premium-only, matching the gating on /diary. Prevents a
+    # cancelled-premium user retaining full history access via this
+    # endpoint while /diary correctly paywalls them.
+    projection = {"food_name": 1, "overall_score": 1, "date": 1, "logged_at": 1, "scan_id": 1}
+    if _effective_premium(current_user):
+        projection.update({
+            "verdict": 1, "barcode": 1, "product_image": 1, "dimensions": 1,
+            "flags": 1, "forYourCondition": 1, "alternatives": 1,
+            "bodySystemsAffected": 1,
+        })
+    entries = await db.diary.find({"user_id": uid}, projection).sort("logged_at", -1).to_list(200)
     return {"history": [doc_to_dict(e) for e in entries]}
 
 # ── SHOPPING LIST ─────────────────────────────────────────────────────────────
