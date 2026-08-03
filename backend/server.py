@@ -104,9 +104,18 @@ from services.email import (
 
 # ── Weekly report cron task ───────────────────────────────────────────────────
 async def _send_weekly_reports():
-    """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ diary entries."""
+    """Cron: every Sunday 09:00 UTC — send summary email to users with 3+ diary entries.
+
+    Finding 6.C — per-user-per-ISO-week idempotency via
+    `weekly_report_sent_YYYY_WW` flag (atomic compare-and-set), plus an
+    asyncio.Semaphore(10) to bound concurrent Resend calls so a large
+    user base doesn't burst-hit Resend's throughput ceiling."""
     logger_w = logging.getLogger(__name__)
-    seven_days_ago = (datetime.now(timezone.utc).date() - timedelta(days=7)).isoformat()
+    now = datetime.now(timezone.utc)
+    seven_days_ago = (now.date() - timedelta(days=7)).isoformat()
+    iso_year, iso_week, _ = now.isocalendar()
+    week_flag = f"weekly_report_sent_{iso_year}_{iso_week:02d}"
+
     users = await db.users.find(
         {
             "email": {"$exists": True, "$nin": [None, ""]},
@@ -116,29 +125,51 @@ async def _send_weekly_reports():
         {"_id": 1, "email": 1, "name": 1}
     ).to_list(10000)
 
-    sent = 0
-    for user in users:
+    semaphore = asyncio.Semaphore(10)
+    sent_count = 0
+    lock = asyncio.Lock()
+
+    async def _send_for(user):
+        nonlocal sent_count
         uid = str(user["_id"])
         entries = await db.diary.find(
             {"user_id": uid, "date": {"$gte": seven_days_ago}},
             {"food_name": 1, "overall_score": 1}
         ).to_list(200)
         if len(entries) < 3:
-            continue
+            return
+        # Atomic claim of the per-week flag — if another instance already
+        # sent this week's report for this user, skip.
+        claimed = await db.users.find_one_and_update(
+            {"_id": user["_id"], week_flag: {"$ne": True}},
+            {"$set": {week_flag: True}}
+        )
+        if claimed is None:
+            return
         avg_score   = round(sum(e.get("overall_score", 0) for e in entries) / len(entries))
         green_foods = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) >= 70))[:3]
         red_foods   = list(set(e["food_name"] for e in entries if e.get("overall_score", 0) < 40))[:3]
-        ok = await send_weekly_report_email(
-            to=user["email"],
-            name=user.get("name", ""),
-            scan_count=len(entries),
-            avg_score=avg_score,
-            green_foods=green_foods,
-            red_foods=red_foods,
-        )
+        async with semaphore:
+            ok = await send_weekly_report_email(
+                to=user["email"],
+                name=user.get("name", ""),
+                scan_count=len(entries),
+                avg_score=avg_score,
+                green_foods=green_foods,
+                red_foods=red_foods,
+            )
         if ok:
-            sent += 1
-    logger_w.info(f"Weekly reports: sent {sent}/{len(users)} emails")
+            async with lock:
+                sent_count += 1
+        else:
+            # Rollback the flag so the next cron run retries this user.
+            await db.users.update_one(
+                {"_id": user["_id"]},
+                {"$unset": {week_flag: ""}}
+            )
+
+    await asyncio.gather(*(_send_for(u) for u in users), return_exceptions=True)
+    logger_w.info(f"Weekly reports ({iso_year}-W{iso_week:02d}): sent {sent_count}/{len(users)} emails")
 
 # ── Re-engagement cron task ───────────────────────────────────────────────────
 async def _send_reengagement_emails():
@@ -170,13 +201,24 @@ async def _send_trial_ending_emails():
         email = user.get("email")
         if not email:
             continue
+        # Finding 6.D — atomic claim of the flag BEFORE sending. Previously
+        # the check-and-set was two separate operations, so cron + webhook
+        # trial_will_end handler could both pass the check and both send.
+        claimed = await db.users.find_one_and_update(
+            {"_id": user["_id"], "trial_ending_email_sent": {"$ne": True}},
+            {"$set": {"trial_ending_email_sent": True}}
+        )
+        if claimed is None:
+            continue
         ok = await send_trial_ending_email(to=email, name=user.get("name", ""))
         if ok:
+            sent += 1
+        else:
+            # Rollback so the next run can retry.
             await db.users.update_one(
                 {"_id": user["_id"]},
-                {"$set": {"trial_ending_email_sent": True}},
+                {"$unset": {"trial_ending_email_sent": ""}}
             )
-            sent += 1
     logger_t.info(f"Trial ending emails: sent {sent}/{len(users)} emails")
 
 # ── Premium expiry sweep cron task ───────────────────────────────────────────
@@ -1314,18 +1356,37 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
     # Premium/admin users have is_free_scan=False and are never consumed.
     # This block appears EXACTLY ONCE and cannot be skipped.
     if is_free_scan:
-        await db.users.update_one(
-            {"_id": ObjectId(uid)},
+        # Finding 6.B — atomic claim of the free-scan-consumed flag AND the
+        # scan_limit_email_sent idempotency flag in one update. Only send
+        # the email if we claimed the flag (pre-update doc did not already
+        # have it). Protects against a manual DB reset of has_used_free_scan
+        # or the 2.D double-spend race both firing send_scan_limit_email.
+        pre = await db.users.find_one_and_update(
+            {"_id": ObjectId(uid), "scan_limit_email_sent": {"$ne": True}},
             {"$set": {
                 "has_used_free_scan": True,
                 "free_scan_used_at": datetime.now(timezone.utc).isoformat(),
                 "abandoned": False,
+                "scan_limit_email_sent": True,
             }}
         )
-        asyncio.create_task(send_scan_limit_email(
-            to=current_user.get("email", ""),
-            name=current_user.get("name", ""),
-        ))
+        if pre is not None:
+            asyncio.create_task(send_scan_limit_email(
+                to=current_user.get("email", ""),
+                name=current_user.get("name", ""),
+            ))
+        else:
+            # Flag was already set — still make sure has_used_free_scan is True
+            # (defensive: covers the case where an admin cleared has_used_free_scan
+            # but scan_limit_email_sent remained set).
+            await db.users.update_one(
+                {"_id": ObjectId(uid)},
+                {"$set": {
+                    "has_used_free_scan": True,
+                    "free_scan_used_at": datetime.now(timezone.utc).isoformat(),
+                    "abandoned": False,
+                }}
+            )
 
     return rating_data
 
@@ -2024,25 +2085,26 @@ async def stripe_webhook(request: Request):
             if customer_id:
                 uid = await _find_uid_by_customer(customer_id)
                 if uid:
-                    # Dedup against the daily trial-ending cron. The cron uses the same
-                    # flag — whichever path fires first sends the email; the other is a
-                    # no-op. Prevents users from receiving the same email twice.
-                    trial_user = await db.users.find_one(
+                    # Finding 6.D — atomic claim of trial_ending_email_sent so
+                    # webhook + cron cannot both send. Previously find + update
+                    # were separate operations and would race.
+                    trial_user = await db.users.find_one_and_update(
                         {"_id": ObjectId(uid), "trial_ending_email_sent": {"$ne": True}},
-                        {"email": 1, "name": 1},
+                        {"$set": {"trial_ending_email_sent": True}},
+                        projection={"email": 1, "name": 1},
                     )
                     if trial_user:
-                        async def _send_and_flag():
+                        async def _send_and_maybe_rollback():
                             ok = await send_trial_ending_email(
                                 to=trial_user.get("email", ""),
                                 name=trial_user.get("name", ""),
                             )
-                            if ok:
+                            if not ok:
                                 await db.users.update_one(
                                     {"_id": ObjectId(uid)},
-                                    {"$set": {"trial_ending_email_sent": True}},
+                                    {"$unset": {"trial_ending_email_sent": ""}}
                                 )
-                        asyncio.create_task(_send_and_flag())
+                        asyncio.create_task(_send_and_maybe_rollback())
 
         elif event_type == "customer.subscription.updated":
             sub_status = data_obj.get("status", "")
