@@ -112,7 +112,6 @@ export default function FreeScanScreen({ onComplete }) {
         headers: getHeaders(), withCredentials: true,
       });
       setResult(res.data);
-      ph.scanLimitReached();
       setPhase("result");
     } catch (e) {
       const msg = e.response?.data?.detail;
@@ -140,7 +139,6 @@ export default function FreeScanScreen({ onComplete }) {
           product_image: image_url,
         }, { headers: getHeaders(), withCredentials: true });
         setResult(ratingRes.data);
-        ph.scanLimitReached();
         setPhase("result");
       } else if (lookupRes.data.provider_down) {
         // Finding 3.A — OFF outage is distinct from product-not-found.
@@ -382,7 +380,7 @@ export default function FreeScanScreen({ onComplete }) {
               </p>
             </div>
 
-            <motion.button whileTap={{ scale: 0.97 }} onClick={onComplete}
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => { ph.scanLimitReached(); onComplete(); }}
               style={{ width: "100%", border: "none", borderRadius: 14, padding: "18px 24px", fontSize: 16, fontWeight: 700, cursor: "pointer", background: `linear-gradient(135deg, ${PRI}, #756AD9)`, color: "#fff", boxShadow: "0 4px 20px rgba(83,74,183,0.30)", marginBottom: 0, minHeight: 56, letterSpacing: "-0.01em" }}>
               See your plan options →
             </motion.button>

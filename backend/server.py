@@ -1520,12 +1520,12 @@ Return ONLY a JSON array, no markdown:
             {"$set": {"patterns": patterns_list, "generated_at": now.isoformat(), "diary_count_at_generation": total_diary}},
             upsert=True
         )
-        _ph_capture(current_user.get("email", ""), "patterns_viewed", {"total_diary": total_diary, "pattern_count": len(patterns_list)})
+        _ph_capture(str(uid), "patterns_viewed", {"email": current_user.get("email", ""), "total_diary": total_diary, "pattern_count": len(patterns_list)})
         return {"patterns": patterns_list, "total_diary": total_diary, "needed": 7}
     except Exception as e:
         logger.error(f"Patterns AI error: {e}")
         if cached and cached.get("patterns"):
-            _ph_capture(current_user.get("email", ""), "patterns_viewed", {"total_diary": total_diary, "pattern_count": len(cached["patterns"]), "from_cache": True})
+            _ph_capture(str(uid), "patterns_viewed", {"email": current_user.get("email", ""), "total_diary": total_diary, "pattern_count": len(cached["patterns"]), "from_cache": True})
             return {"patterns": cached["patterns"], "total_diary": total_diary, "needed": 7}
         return {"patterns": [], "total_diary": total_diary, "needed": 7, "message": "Analysis unavailable right now. Keep logging!"}
 
@@ -1931,7 +1931,7 @@ async def stripe_webhook(request: Request):
                                 name=upgraded_user.get("name", ""),
                                 plan=plan,
                             ))
-                            _ph_capture(upgraded_user.get("email", user_id), "subscription_started", {"plan": plan, "is_trial": is_trial})
+                            _ph_capture(str(user_id), "subscription_started", {"email": upgraded_user.get("email", ""), "plan": plan, "is_trial": is_trial})
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
@@ -2002,7 +2002,7 @@ async def stripe_webhook(request: Request):
                             to=cancelled_user.get("email", ""),
                             name=cancelled_user.get("name", ""),
                         ))
-                        _ph_capture(cancelled_user.get("email", uid), "subscription_cancelled", {})
+                        _ph_capture(str(uid), "subscription_cancelled", {"email": cancelled_user.get("email", "")})
 
         elif event_type == "invoice.payment_succeeded":
             customer_id = data_obj.get("customer")
@@ -2066,7 +2066,7 @@ async def stripe_webhook(request: Request):
                                         referrer_name=referrer.get("name", ""),
                                         referred_name=claim.get("name", ""),
                                     ))
-                                    _ph_capture(referrer.get("email", str(referrer["_id"])), "referral_reward_earned", {"referred_user": claim.get("email", "")})
+                                    _ph_capture(str(referrer["_id"]), "referral_reward_earned", {"email": referrer.get("email", ""), "referred_user": claim.get("email", "")})
                                 else:
                                     await db.users.update_one(
                                         {"_id": referrer["_id"]},

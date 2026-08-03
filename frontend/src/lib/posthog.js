@@ -17,7 +17,13 @@ export function initPostHog() {
     api_host: POSTHOG_HOST,
     capture_pageview: true,
     capture_pageleave: true,
-    session_recording: { maskAllInputs: true },
+    // Finding 8.E — recordings mask all inputs AND all text. Insights,
+    // diary, and patterns screens render personalised medical content
+    // (condition-specific rating narratives, symptom summaries) as plain
+    // DOM text, which would otherwise be captured verbatim by session
+    // recording. maskAllText redacts that content while preserving
+    // layout/click/timing signal so we still get UX visibility.
+    session_recording: { maskAllInputs: true, maskAllText: true },
     autocapture: true,
   });
 }
