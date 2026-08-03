@@ -165,7 +165,7 @@ export function AuthProvider({ children }) {
   };
 
   const updateProfile = async (profileData) => {
-    await axios.put(`${API}/profile`, profileData);
+    await axios.put(`${API}/profile`, profileData, { headers: getHeaders(), withCredentials: true });
     await refreshUser();
   };
 
