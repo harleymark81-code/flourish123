@@ -1043,22 +1043,24 @@ async def rate_food(request: Request, data: FoodRatingRequest, current_user: dic
     rating_data = None
     from_cache = False
 
-    # ── 24h barcode cache check ─────────────────────────────────────────────
+    # ── 24h barcode cache check (finding 2.B / 3.I, Option A) ─────────────
+    # Cache now stores only OBJECTIVE fields (overallScore, dimension
+    # scores + generic summaries, positives, product image). Per-user
+    # narrative fields (forYourCondition, dimensions.*.why, warnings, tips,
+    # alternatives, bodySystemsAffected, verdict) are stripped on write so
+    # one user's narrative can never be served to the next user of the same
+    # barcode. On cache-hit, AI still runs to generate a fresh per-user
+    # narrative; cached objective fields then override the AI's own
+    # objective outputs for cross-user consistency (same food, same score).
+    cached_objective = None
     if data.barcode:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         cached = await db.barcode_cache.find_one({"barcode": data.barcode})
         if cached and cached.get("cached_at") and cached["cached_at"] > cutoff:
-            rating_data = dict(cached["rating_data"])
-            rating_data["product_image"] = data.product_image or cached["rating_data"].get("product_image", "")
-            rating_data["rated_at"] = datetime.now(timezone.utc).isoformat()
-            rating_data["user_id"] = uid
-            rating_data["date"] = today
-            rating_data["id"] = str(uuid.uuid4())
-            rating_data["from_cache"] = True
-            from_cache = True
-            logger.info(f"Barcode cache hit: {data.barcode}")
+            cached_objective = dict(cached.get("rating_data") or {})
+            logger.info(f"Barcode cache hit (objective only): {data.barcode}")
 
-    # ── AI rating (only when no cache hit) ─────────────────────────────────
+    # ── AI rating (always runs; per-user narrative is never cached) ────────
     if rating_data is None:
         conditions = current_user.get("conditions", [])
         goals = current_user.get("goals", [])
@@ -1198,6 +1200,29 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
             rating_data["user_id"] = uid
             rating_data["date"] = today
             rating_data["id"] = str(uuid.uuid4())
+
+            # Finding 2.B / 3.I — on cache-hit, override AI's own objective
+            # outputs with the cached versions so the same food yields the
+            # same overallScore and dimension scores across every user. The
+            # AI's per-user narrative (forYourCondition, warnings, tips,
+            # alternatives, verdict, dimensions.*.why) is left untouched
+            # because it is legitimately per-user.
+            if cached_objective:
+                if "overallScore" in cached_objective:
+                    rating_data["overallScore"] = cached_objective["overallScore"]
+                cached_dims = cached_objective.get("dimensions") or {}
+                for dim_name, dim in cached_dims.items():
+                    tgt = (rating_data.get("dimensions") or {}).get(dim_name)
+                    if tgt is not None:
+                        if "score" in dim:
+                            tgt["score"] = dim["score"]
+                        if "summary" in dim:
+                            tgt["summary"] = dim["summary"]
+                cached_pos = (cached_objective.get("flags") or {}).get("positives")
+                if cached_pos:
+                    rating_data.setdefault("flags", {})["positives"] = cached_pos
+                rating_data["from_cache"] = True
+                from_cache = True
         except json.JSONDecodeError as e:
             logger.error(f"JSON parse error: {e}, response: {response_text[:500]}")
             raise HTTPException(status_code=500, detail="Failed to parse AI response")
@@ -1243,11 +1268,31 @@ Return ONLY this exact JSON structure (no markdown, no extra text):
     # Write to barcode cache — only for fresh AI results; don't rewrite on hit
     if data.barcode and not from_cache:
         try:
+            # Finding 2.B / 3.I — cache stores ONLY objective fields.
+            # Per-user narrative fields are omitted so the cache can never
+            # serve one user's narrative to another. Dimension scores +
+            # generic summaries are per-food (per Step 5 of the rubric),
+            # not per-user, so they are cacheable.
+            cache_dims = {}
+            for dim_name, dim in (rating_data.get("dimensions") or {}).items():
+                cache_dims[dim_name] = {
+                    "score": dim.get("score"),
+                    "summary": dim.get("summary"),
+                }
+            cache_payload = {
+                "name": rating_data.get("name"),
+                "food_name": rating_data.get("food_name"),
+                "overallScore": rating_data.get("overallScore"),
+                "product_image": rating_data.get("product_image"),
+                "barcode": rating_data.get("barcode"),
+                "dimensions": cache_dims,
+                "flags": {"positives": (rating_data.get("flags") or {}).get("positives", [])},
+            }
             await db.barcode_cache.update_one(
                 {"barcode": data.barcode},
                 {"$set": {
                     "barcode": data.barcode,
-                    "rating_data": {k: v for k, v in rating_data.items() if k not in ("user_id", "date", "rated_at", "id")},
+                    "rating_data": cache_payload,
                     "cached_at": datetime.now(timezone.utc),
                 }},
                 upsert=True
