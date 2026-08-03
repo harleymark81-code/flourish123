@@ -2955,15 +2955,21 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
         )
         frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")
         reset_link = f"{frontend_url}/reset-password?token={token}"
-        ok = await send_password_reset_email(
-            to=email,
-            name=user.get("name", ""),
-            reset_link=reset_link,
-        )
-        if not ok:
-            logger.warning(f"Password reset email failed for {email}")
-        else:
-            logger.info(f"Password reset email sent to {email}")
+        # Finding 6.E — fire-and-forget the Resend call. Awaiting it would
+        # block the response for up to the Resend SDK timeout (~30s) if
+        # Resend is degraded, and the enumeration-safe response is the same
+        # either way. Log the outcome inside the task.
+        async def _send_reset_and_log():
+            ok = await send_password_reset_email(
+                to=email,
+                name=user.get("name", ""),
+                reset_link=reset_link,
+            )
+            if not ok:
+                logger.warning(f"Password reset email failed for {email}")
+            else:
+                logger.info(f"Password reset email sent to {email}")
+        asyncio.create_task(_send_reset_and_log())
     return {"success": True, "message": "If an account exists with this email, a reset link has been sent."}
 
 @api_router.post("/auth/reset-password")
