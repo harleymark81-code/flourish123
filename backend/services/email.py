@@ -399,9 +399,16 @@ async def send_reengagement_email(db) -> None:
     Queries the underlying conditions directly — the `abandoned` flag set by
     `_maybe_mark_abandoned` only fires on authenticated requests, so it would
     silently miss users who never returned (the exact cohort we want to reach).
+
+    Finding 6.I — bounded by asyncio.Semaphore(5) and an env-tunable
+    MAX_REENGAGEMENT_PER_DAY cap (default 90 to stay under Resend's free-tier
+    100/day if that is what Railway is provisioned with). Uses atomic
+    find_one_and_update to claim reengagement_email_sent before sending so
+    concurrent tasks and cron re-runs cannot double-send.
     """
     log = logging.getLogger(__name__)
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    max_per_day = int(os.environ.get("MAX_REENGAGEMENT_PER_DAY", "90"))
     users = await db.users.find(
         {
             "has_used_free_scan": True,
@@ -412,13 +419,24 @@ async def send_reengagement_email(db) -> None:
             "email": {"$exists": True, "$nin": [None, ""]},
         },
         {"_id": 1, "email": 1, "name": 1},
-    ).to_list(10000)
+    ).limit(max_per_day).to_list(max_per_day)
 
-    sent = 0
-    for user in users:
+    semaphore = asyncio.Semaphore(5)
+    sent_count = 0
+    lock = asyncio.Lock()
+
+    async def _send_for(user):
+        nonlocal sent_count
         to = user.get("email")
         if not to:
-            continue
+            return
+        # Atomic claim of the flag so a concurrent run does not double-send.
+        claimed = await db.users.find_one_and_update(
+            {"_id": user["_id"], "reengagement_email_sent": {"$ne": True}},
+            {"$set": {"reengagement_email_sent": True}}
+        )
+        if claimed is None:
+            return
         first = (user.get("name") or "there").split()[0]
         body = (
             _h1("We miss you, " + first + ".")
@@ -430,14 +448,20 @@ async def send_reengagement_email(db) -> None:
             + _p("It takes less than a minute and the insights are built entirely around your health conditions.", muted=True)
             + _btn("Pick up where I left off", FRONTEND_URL)
         )
-        ok = await send_email(to, "We saved your Flourish profile, " + first + " — come back and use it", _wrap(body))
+        async with semaphore:
+            ok = await send_email(to, "We saved your Flourish profile, " + first + " — come back and use it", _wrap(body))
         if ok:
+            async with lock:
+                sent_count += 1
+        else:
+            # Rollback so the next cron run retries this user.
             await db.users.update_one(
                 {"_id": user["_id"]},
-                {"$set": {"reengagement_email_sent": True}},
+                {"$unset": {"reengagement_email_sent": ""}}
             )
-            sent += 1
-    log.info("[reengagement] sent %d/%d emails", sent, len(users))
+
+    await asyncio.gather(*(_send_for(u) for u in users), return_exceptions=True)
+    log.info("[reengagement] sent %d/%d emails (cap=%d)", sent_count, len(users), max_per_day)
 
 
 # -- 10. Cancellation ----------------------------------------------------------
