@@ -4,8 +4,13 @@ const POSTHOG_KEY = process.env.REACT_APP_POSTHOG_KEY || "phc_PLACEHOLDER";
 const POSTHOG_HOST = "https://eu.i.posthog.com";
 
 export function initPostHog() {
-  if (!POSTHOG_KEY || POSTHOG_KEY === "phc_PLACEHOLDER") {
-    console.warn("[PostHog] No API key set — analytics disabled");
+  // Finding 8.A — the build should already have failed via scripts/prebuild.js
+  // if the key is missing/placeholder. This runtime check is defence-in-depth
+  // for anyone who bypasses the prebuild (dev preview, local `craco build`,
+  // etc.). Use console.error so it appears as a red row in the browser
+  // devtools, not a soft warning.
+  if (!POSTHOG_KEY || POSTHOG_KEY === "phc_PLACEHOLDER" || POSTHOG_KEY === "phc_REPLACE_WITH_YOUR_KEY") {
+    console.error("[PostHog] REACT_APP_POSTHOG_KEY missing or placeholder — analytics disabled. This should never happen in production; check Netlify env config.");
     return;
   }
   posthog.init(POSTHOG_KEY, {

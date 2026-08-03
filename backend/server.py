@@ -253,6 +253,12 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──
+    # Finding 8.B — loudly announce if server-side PostHog is disabled so the
+    # deployer sees it in Railway logs instead of learning weeks later that
+    # subscription_started / referral_reward_earned / patterns_viewed events
+    # never made it into analytics.
+    if not os.environ.get("POSTHOG_API_KEY", "").strip():
+        logger.error("[startup] POSTHOG_API_KEY not set — server-side analytics disabled. Set it on Railway to match the frontend key.")
     await db.users.create_index("email", unique=True)
     # Finding 7.C — unique+sparse index on the normalised email_key so a
     # race between two simultaneous plus-address signups is caught at the
