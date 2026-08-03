@@ -1797,6 +1797,26 @@ async def get_payment_status(session_id: str, request: Request, current_user: di
                         {"$set": user_set}
                     )
                     logger.info(f"User {user_id} upgraded to premium via status poll (plan: {plan}, referral_trial: {extended_referral_trial})")
+                    # Finding 5.A / 6.K — send confirmation email + fire the
+                    # subscription_started PostHog event from the poll path too.
+                    # Previously only the webhook did this, so if the webhook
+                    # was misconfigured or slow, users upgraded silently — no
+                    # email, no conversion in analytics. Compare-and-set on
+                    # confirmation_email_sent guarantees webhook + poll can
+                    # race without double-sending.
+                    _claimed = await db.payment_transactions.find_one_and_update(
+                        {"session_id": session_id, "confirmation_email_sent": {"$ne": True}},
+                        {"$set": {"confirmation_email_sent": True}}
+                    )
+                    if _claimed is not None:
+                        upgraded_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
+                        if upgraded_user:
+                            asyncio.create_task(send_subscription_confirmed_email(
+                                to=upgraded_user.get("email", ""),
+                                name=upgraded_user.get("name", ""),
+                                plan=plan,
+                            ))
+                            _ph_capture(str(user_id), "subscription_started", {"email": upgraded_user.get("email", ""), "plan": plan, "is_trial": is_trial})
 
         return {"status": status, "payment_status": payment_status, "is_success": is_success}
     except Exception as e:
@@ -1923,15 +1943,23 @@ async def stripe_webhook(request: Request):
                             {"$set": user_set}
                         )
                         logger.info(f"User {user_id} upgraded to premium via webhook (plan: {plan}, referral_trial: {extended_referral_trial})")
-                        # Subscription confirmed email
-                        upgraded_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
-                        if upgraded_user:
-                            asyncio.create_task(send_subscription_confirmed_email(
-                                to=upgraded_user.get("email", ""),
-                                name=upgraded_user.get("name", ""),
-                                plan=plan,
-                            ))
-                            _ph_capture(str(user_id), "subscription_started", {"email": upgraded_user.get("email", ""), "plan": plan, "is_trial": is_trial})
+                        # Finding 5.A / 6.K — compare-and-set on
+                        # confirmation_email_sent so webhook + poll never both
+                        # send the confirmation email or double-fire the
+                        # subscription_started event.
+                        _claimed = await db.payment_transactions.find_one_and_update(
+                            {"session_id": session_id, "confirmation_email_sent": {"$ne": True}},
+                            {"$set": {"confirmation_email_sent": True}}
+                        )
+                        if _claimed is not None:
+                            upgraded_user = await db.users.find_one({"_id": ObjectId(user_id)}, {"email": 1, "name": 1})
+                            if upgraded_user:
+                                asyncio.create_task(send_subscription_confirmed_email(
+                                    to=upgraded_user.get("email", ""),
+                                    name=upgraded_user.get("name", ""),
+                                    plan=plan,
+                                ))
+                                _ph_capture(str(user_id), "subscription_started", {"email": upgraded_user.get("email", ""), "plan": plan, "is_trial": is_trial})
                     except Exception as e:
                         logger.error(f"Failed to upgrade user {user_id} via webhook: {e}")
 
