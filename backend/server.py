@@ -263,6 +263,12 @@ db = client[os.environ['DB_NAME']]
 JWT_ALGORITHM = "HS256"
 IS_PRODUCTION = os.environ.get("ENVIRONMENT", "").lower() == "production"
 
+# Finding 10.I — single module-level FRONTEND_URL, env-driven with a
+# production-safe default. All previous `os.environ.get("FRONTEND_URL", ...)`
+# call sites now read this constant so a rebrand or www<->non-www toggle
+# needs only one place to change.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://theflourishapp.health").rstrip("/")
+
 # ── Admin token (set ADMIN_SESSION_TOKEN in Railway env vars) ─────────────────
 ADMIN_SESSION_TOKEN = os.environ.get("ADMIN_SESSION_TOKEN", "")
 
@@ -295,6 +301,27 @@ limiter = Limiter(key_func=get_remote_address)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ── Startup ──
+    # Finding 10.F — hard-fail at startup if any required env var is unset,
+    # listing every missing var in one error. Previously ANTHROPIC_API_KEY,
+    # STRIPE_*, RESEND_API_KEY and JWT_SECRET could all be missing and the
+    # server would still start; users would then hit 500s or silent-drop
+    # features. MONGO_URL / DB_NAME / ADMIN_PASSWORD already fail loudly
+    # upstream (at import or right below), so are excluded from this check.
+    _required_env = [
+        "JWT_SECRET",
+        "ANTHROPIC_API_KEY",
+        "STRIPE_SECRET_KEY",
+        "STRIPE_MONTHLY_PRICE_ID",
+        "STRIPE_ANNUAL_PRICE_ID",
+        "STRIPE_WEBHOOK_SECRET",
+        "RESEND_API_KEY",
+    ]
+    _missing = [k for k in _required_env if not os.environ.get(k, "").strip()]
+    if _missing:
+        raise RuntimeError(
+            f"[startup] Missing required env vars: {', '.join(_missing)}. "
+            "Set them in Railway before boot."
+        )
     # Finding 8.B — loudly announce if server-side PostHog is disabled so the
     # deployer sees it in Railway logs instead of learning weeks later that
     # subscription_started / referral_reward_earned / patterns_viewed events
@@ -401,7 +428,11 @@ async def lifespan(app: FastAPI):
     )
     _scheduler.start()
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@flourish.app")
+    # Finding 10.E — correct default domain. Was `admin@flourish.app` which
+    # is not a domain Flourish owns; the startup owner-grant would create an
+    # admin account for a mailbox no one controls and password-reset would
+    # bounce.
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@theflourishapp.health")
     admin_password = os.environ.get("ADMIN_PASSWORD")
     if not admin_password:
         raise RuntimeError("ADMIN_PASSWORD env var is required — set it in Railway")
@@ -453,12 +484,19 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 api_router = APIRouter(prefix="/api")
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
+# Finding 10.G — backend Railway URL removed from the allowlist. A checkout
+# with that origin would redirect to the backend which has no `/?success=true`
+# route. Harmless but semantically wrong and left an odd entry in the list.
+# Finding 10.H — allowlist is now env-driven via CORS_ORIGINS_ALLOWLIST with
+# a hardcoded prod-safe fallback. Future domain migrations (staging.*, app.*,
+# mobile-webview.*) no longer need a code change + redeploy.
+_CORS_DEFAULT = "https://theflourishapp.health,https://www.theflourishapp.health"
 _allow_origins = [
-    "https://flourish123-production.up.railway.app",
-    "https://theflourishapp.health",
-    "https://www.theflourishapp.health",
+    o.strip()
+    for o in os.environ.get("CORS_ORIGINS_ALLOWLIST", _CORS_DEFAULT).split(",")
+    if o.strip()
 ]
-# Add localhost only in non-production (set CORS_ORIGINS env var locally)
+# Add localhost / dev origins only in non-production via CORS_ORIGINS
 _extra = os.environ.get("CORS_ORIGINS", "")
 if _extra:
     _allow_origins += [o.strip() for o in _extra.split(",") if o.strip()]
@@ -666,11 +704,9 @@ class PasswordResetConfirmRequest(BaseModel):
 class MealPlanRequest(BaseModel):
     regenerate: Optional[bool] = False
 
-_ALLOWED_ORIGINS = {
-    "https://flourish123-production.up.railway.app",
-    "https://theflourishapp.health",
-    "https://www.theflourishapp.health",
-}
+# Finding 10.G / 10.H — allowlist for /payments/checkout origin_url. Shares
+# the same env-driven source as the CORS allowlist so both stay in sync.
+_ALLOWED_ORIGINS = set(_allow_origins)
 
 class CheckoutRequest(BaseModel):
     plan: str = Field(pattern="^(monthly|annual)$")
@@ -2302,7 +2338,6 @@ async def create_portal_session(current_user: dict = Depends(get_current_user)):
 async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or current_user.get("_id")
     referral_code = current_user.get("referral_code", "")
-    frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")
 
     # Older accounts may have been created before the referral_code field was
     # added — generate one lazily and persist it so the link always works.
@@ -2328,7 +2363,7 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
     # figures because that IS a cash-payout program.
     return {
         "referral_code": referral_code,
-        "referral_link": f"{frontend_url}?ref={referral_code}",
+        "referral_link": f"{FRONTEND_URL}?ref={referral_code}",
         "paying_referrals": paying_referrals,
         "free_months_earned": paying_referrals,
     }
@@ -2349,7 +2384,7 @@ async def get_referrals_stats(current_user: dict = Depends(get_current_user)):
     ) or {}
     return {
         "referral_code": referral_code,
-        "referral_link": f"{os.environ.get('FRONTEND_URL', 'https://theflourishapp.health')}?ref={referral_code}",
+        "referral_link": f"{FRONTEND_URL}?ref={referral_code}",
         "referral_count": fresh.get("referral_count", 0),
         "referral_rewarded": fresh.get("referral_rewarded", False),
     }
@@ -2953,8 +2988,7 @@ async def forgot_password(request: Request, data: PasswordResetRequest):
             {"email": email},
             {"$set": {"password_reset_token": token, "password_reset_expires": expires}}
         )
-        frontend_url = os.environ.get("FRONTEND_URL", "https://theflourishapp.health")
-        reset_link = f"{frontend_url}/reset-password?token={token}"
+        reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
         # Finding 6.E — fire-and-forget the Resend call. Awaiting it would
         # block the response for up to the Resend SDK timeout (~30s) if
         # Resend is degraded, and the enumeration-safe response is the same

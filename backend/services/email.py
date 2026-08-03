@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 FROM_ADDRESS = "Flourish <hello@mail.theflourishapp.health>"
 REPLY_TO = "hello@theflourishapp.health"
-FRONTEND_URL = "https://theflourishapp.health"
+# Finding 10.I — env-driven with a safe production default. Consolidates with
+# server.py's FRONTEND_URL constant so a single env var override changes both.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://theflourishapp.health").rstrip("/")
 
 # -- Brand colours -------------------------------------------------------------
 PURPLE      = "#534AB7"
