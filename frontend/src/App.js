@@ -15,6 +15,9 @@ import Paywall from "./components/Paywall";
 import AdminDashboard from "./pages/AdminDashboard";
 import AffiliateApplication from "./pages/AffiliateApplication";
 import AffiliateDashboard from "./pages/AffiliateDashboard";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import CookiePolicy from "./pages/CookiePolicy";
+import ConsentBanner from "./components/ConsentBanner";
 import InsightsScreen from "./components/InsightsScreen";
 import MyFoodsScreen from "./components/MyFoodsScreen";
 import ResetPassword from "./components/ResetPassword";
@@ -199,6 +202,9 @@ function AppContent() {
   if (location.pathname === "/affiliate") return <AffiliateApplication />;
   if (location.pathname === "/affiliate/dashboard") return <AffiliateDashboard />;
   if (location.pathname === "/reset-password") return <ResetPassword />;
+  // Finding 8.D — legal pages, reachable when logged out (banner links here).
+  if (location.pathname === "/privacy") return <PrivacyPolicy />;
+  if (location.pathname === "/cookies") return <CookiePolicy />;
 
   const params = new URLSearchParams(window.location.search);
   if (params.get("session_id") && params.get("success") === "true") return <StripeReturn />;
@@ -353,6 +359,10 @@ function App() {
           <Routes>
             <Route path="/*" element={<AppContent />} />
           </Routes>
+          {/* Finding 8.D — consent banner mounted at root so it overlays
+              every screen (AuthScreen, Onboarding, main app, legal pages)
+              until the user makes a choice. */}
+          <ConsentBanner />
         </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>

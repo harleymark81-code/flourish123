@@ -2,8 +2,29 @@ import posthog from "posthog-js";
 
 const POSTHOG_KEY = process.env.REACT_APP_POSTHOG_KEY || "phc_PLACEHOLDER";
 const POSTHOG_HOST = "https://eu.i.posthog.com";
+const CONSENT_KEY = "fl_consent";
+
+let _initialised = false;
+
+// Finding 8.D — consent gate. PostHog must not init or send any event
+// until the user has explicitly accepted. `hasConsentChoice` tells the
+// banner whether it needs to appear; `hasAcceptedAnalytics` tells the
+// rest of the app whether to bother calling track functions.
+export function hasConsentChoice() {
+  const v = typeof window !== "undefined" && localStorage.getItem(CONSENT_KEY);
+  return v === "accepted" || v === "rejected";
+}
+
+export function hasAcceptedAnalytics() {
+  return typeof window !== "undefined" && localStorage.getItem(CONSENT_KEY) === "accepted";
+}
 
 export function initPostHog() {
+  // Finding 8.D — do not init pre-consent. Called both from index.js on
+  // boot (no-op unless user previously accepted) and from enableAnalytics
+  // (after Accept click).
+  if (!hasAcceptedAnalytics()) return;
+  if (_initialised) return;
   // Finding 8.A — the build should already have failed via scripts/prebuild.js
   // if the key is missing/placeholder. This runtime check is defence-in-depth
   // for anyone who bypasses the prebuild (dev preview, local `craco build`,
@@ -26,12 +47,23 @@ export function initPostHog() {
     session_recording: { maskAllInputs: true, maskAllText: true },
     autocapture: true,
   });
+  _initialised = true;
+}
+
+// Called by the consent banner on Accept. Persists the choice, inits
+// PostHog, and re-identifies the currently-signed-in user (if any) so
+// they aren't left as an anonymous session.
+export function enableAnalytics(user) {
+  localStorage.setItem(CONSENT_KEY, "accepted");
+  initPostHog();
+  if (user && _initialised) identifyUser(user);
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
 
 export function identifyUser(user) {
-  if (!user) return;
+  // Finding 8.D — no identity leak pre-consent.
+  if (!user || !hasAcceptedAnalytics()) return;
   posthog.identify(user.id || user._id, {
     email: user.email,
     name: user.name,
@@ -42,12 +74,15 @@ export function identifyUser(user) {
 }
 
 export function resetUser() {
+  if (!hasAcceptedAnalytics()) return;
   posthog.reset();
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 function track(event, props = {}) {
+  // Finding 8.D — no events pre-consent.
+  if (!hasAcceptedAnalytics()) return;
   try {
     posthog.capture(event, props);
   } catch (e) {
